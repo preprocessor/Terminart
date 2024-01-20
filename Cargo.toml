@@ -1,0 +1,15 @@
+[package]
+name = "term-art"
+version = "0.1.0"
+authors = ["wyspr"]
+license = "MIT"
+edition = "2021"
+
+[dependencies]
+ahash = "0.8.7"
+ansi-style = "1.2.0"
+cli-clipboard = "0.4.0"
+color-eyre = "0.6.2"
+crossterm = "0.27.0"
+ratatui = "0.25.0"
+strum = { version = "0.25", features = ["derive"] }
