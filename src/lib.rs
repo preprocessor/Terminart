@@ -21,8 +21,8 @@ pub mod handler;
 
 /// Utility objects
 pub mod utils;
-pub mod utils_charpicker;
-pub mod utils_shapes;
+// pub mod utils_charpicker;
+// pub mod utils_shapes;
 
 const TOOLBOX_WIDTH: u16 = 30;
 const BRUSH_MIN: u16 = 1;

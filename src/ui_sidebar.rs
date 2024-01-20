@@ -13,7 +13,10 @@ use ratatui::{
 
 use crate::{
     app::App,
-    utils::{ClickAction, Increment, SetValue, Tool},
+    utils::{
+        clicks::{ClickAction, Increment, SetValue},
+        tools::Tool,
+    },
     BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, BUTTON_TEXT, BUTTON_TEXT_SEL, LOWER_BLOCK, TOOLBOX_BG,
     TOOL_BORDER, UPPER_BLOCK,
 };

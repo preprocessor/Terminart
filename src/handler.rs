@@ -1,10 +1,9 @@
 use crate::{
     app::{App, Result},
-    utils::{ClickAction, Increment, SetValue, Tool},
-    utils_shapes::DrawShape,
+    utils::clicks::{ClickAction, Increment, SetValue},
     TOOLBOX_WIDTH,
 };
-use ansi_style::{BGColor as ABGColor, Color as AColor};
+use ansi_style::{BGColor, Color as AColor};
 use crossterm::event::{
     KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
     MouseEventKind::{Down, Drag},
@@ -75,22 +74,10 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                         }
 
                         let x = x - TOOLBOX_WIDTH;
-                        let brush_size = app.brush.size;
+                        let size = app.brush.size;
                         let tool = app.brush.tool;
 
-                        let shapes = DrawShape::new(x, y, brush_size);
-
-                        match tool {
-                            Tool::Eraser => app.erase(x, y),
-                            Tool::Square => shapes.square(app),
-                            Tool::Box => shapes.rect(app),
-                            Tool::Disk => shapes.disk(app),
-                            Tool::Circle => shapes.circle(app),
-                            Tool::Crosshair => todo!(),
-                            Tool::Plus => todo!(),
-                            Tool::Vertical => todo!(),
-                            Tool::Horizontal => todo!(),
-                        }
+                        tool.draw(x, y, size, app);
                     }
                     ClickAction::Next(i) => match i {
                         Increment::CharPicker => app.char_picker.next(),
@@ -134,7 +121,7 @@ fn clip_brush(app: &mut App) {
 fn get_drawing_region(app: &App) -> Result<(u16, u16, u16, u16)> {
     let (mut left, mut bottom) = (u16::MAX, u16::MAX);
     let (mut right, mut top) = (u16::MIN, u16::MIN);
-    for &(x, y) in app.drawing.keys() {
+    for &(x, y) in app.canvas.keys() {
         left = left.min(x);
         right = right.max(x);
         bottom = bottom.min(y);
@@ -153,7 +140,7 @@ fn copy_canvas_text(app: &App) -> Result<()> {
     for y in bottom..=top {
         let mut line = String::with_capacity((right - left) as usize);
         for x in left..=right {
-            if let Some(cell) = app.drawing.get(&(x, y)) {
+            if let Some(cell) = app.canvas.get(&(x, y)) {
                 line += &cell.char();
             } else {
                 line += " ";
@@ -197,9 +184,9 @@ macro_rules! get_color {
     };
 }
 
-const fn get_ansi_colors(fg: Color, bg: Color) -> (AColor, ABGColor) {
+const fn get_ansi_colors(fg: Color, bg: Color) -> (AColor, BGColor) {
     let ansi_fg = get_color!(fg, AColor);
-    let ansi_bg = get_color!(bg, ABGColor);
+    let ansi_bg = get_color!(bg, BGColor);
     (ansi_fg, ansi_bg)
 }
 
@@ -210,7 +197,7 @@ fn copy_canvas_ansi(app: &App) -> Result<()> {
     for y in bottom..=top {
         let mut line = String::new();
         for x in left..=right {
-            if let Some(cell) = app.drawing.get(&(x, y)) {
+            if let Some(cell) = app.canvas.get(&(x, y)) {
                 let (fg, bg) = get_ansi_colors(cell.fg, cell.bg);
                 let ansi = format!(
                     "{}{}{}{}{}",

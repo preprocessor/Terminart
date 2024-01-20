@@ -3,7 +3,9 @@ use ratatui::{
     widgets::{canvas::Canvas, Block, BorderType, Borders},
 };
 
-use crate::{app::App, ui_help as help, ui_sidebar as sidebar, utils::ClickAction, TOOLBOX_WIDTH};
+use crate::{
+    app::App, ui_help as help, ui_sidebar as sidebar, utils::clicks::ClickAction, TOOLBOX_WIDTH,
+};
 
 /// Renders the user interface widgets.
 pub fn render(app: &mut App, f: &mut Frame) {
@@ -40,7 +42,7 @@ fn canvas(app: &mut App, f: &mut Frame, area: Rect) {
         .y_bounds([0.0, height])
         .paint(|c| {
             for (x, y, cell) in app
-                .drawing
+                .canvas
                 .iter()
                 .map(|(&(x, y), cell)| (x as f64, y as f64, cell))
             {

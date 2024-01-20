@@ -4,22 +4,31 @@ use ahash::AHashMap;
 use ratatui::layout::Rect;
 
 use crate::{
-    utils::{Brush, Cell, ClickAction, Page, Palette, UndoHistory},
-    utils_charpicker::CharPicker,
+    utils::{
+        brush::Brush, cell::Cell, charpicker::CharPicker, clicks::ClickAction, palette::Palette,
+        undo::History,
+    },
     BRUSH_MAX, BRUSH_MIN,
 };
 
 /// Application result type.
 pub type Result<T> = color_eyre::Result<T, Box<dyn error::Error>>;
 
+pub type Page = AHashMap<(u16, u16), Cell>;
+
+pub struct Layer {
+    name: String,
+    data: Page,
+}
+
 /// Application.
 #[derive(Default, Debug)]
 pub struct App {
     pub running: bool,
     pub needs_help: bool,
-    pub drawing: Page,
+    pub canvas: Page,
     pub click_areas: AHashMap<(u16, u16), ClickAction>,
-    pub undo_history: UndoHistory,
+    pub undo_history: History,
     pub palette: Palette,
     pub char_picker: CharPicker,
     pub brush: Brush,
@@ -38,7 +47,6 @@ impl App {
     /// Handles the tick event of the terminal.
     pub const fn tick(&self) {}
 
-    /// Set running to false to quit the application.
     pub fn quit(&mut self) {
         self.running = false;
     }
@@ -59,14 +67,13 @@ impl App {
             }
         }
     }
-
     // }
 
     // Drawing functions {
     pub fn resize(&mut self, width: u16, height: u16) {
         let new_size = (width * height) as usize;
-        self.drawing.shrink_to(new_size);
-        self.drawing.reserve(new_size);
+        self.canvas.shrink_to(new_size);
+        self.canvas.reserve(new_size);
     }
 
     // /// This is the alternative to `.draw()` that does not record to history
@@ -74,10 +81,13 @@ impl App {
     //     let _ = self.drawing.insert((x, y), new_cell);
     // }
 
-    pub fn erase(&mut self, x: u16, y: u16) {
-        if let Some(old_cell) = self.drawing.remove(&(x, y)) {
-            self.undo_history.forget_redo();
-            self.undo_history.add_undo(x, y, old_cell);
+    pub fn erase(&mut self, x: i16, y: i16) {
+        if x >= 0 && y >= 0 {
+            let (x, y) = (x as u16, y as u16);
+            if let Some(old_cell) = self.canvas.remove(&(x, y)) {
+                self.undo_history.forget_redo();
+                self.undo_history.add_undo(x, y, old_cell);
+            }
         }
     }
 
@@ -86,7 +96,7 @@ impl App {
             let (x, y) = (x as u16, y as u16);
             let new_cell = self.brush.as_cell();
             let old_cell = self
-                .drawing
+                .canvas
                 .insert((x, y), new_cell)
                 .unwrap_or(Cell::empty());
 
@@ -98,7 +108,7 @@ impl App {
     pub fn undo(&mut self) {
         if let Some(undo_page) = self.undo_history.undo() {
             for ((x, y), cell) in undo_page {
-                let old_cell = self.drawing.insert((x, y), cell).unwrap_or(Cell::empty());
+                let old_cell = self.canvas.insert((x, y), cell).unwrap_or(Cell::empty());
                 self.undo_history.add_redo(x, y, old_cell);
             }
         }
@@ -107,16 +117,16 @@ impl App {
     pub fn redo(&mut self) {
         if let Some(redo_page) = self.undo_history.redo() {
             for ((x, y), cell) in redo_page {
-                let old_cell = self.drawing.insert((x, y), cell).unwrap_or(Cell::empty());
+                let old_cell = self.canvas.insert((x, y), cell).unwrap_or(Cell::empty());
                 self.undo_history.add_undo(x, y, old_cell);
             }
         }
     }
 
     pub fn reset(&mut self) {
-        self.undo_history.past.push(self.drawing.clone());
+        self.undo_history.past.push(self.canvas.clone());
         self.undo_history.forget_redo();
-        self.drawing.clear();
+        self.canvas.clear();
     }
     // }
 
