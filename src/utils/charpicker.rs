@@ -5,7 +5,6 @@ pub type CharMap = AHashMap<(u16, u16), char>;
 #[derive(Clone, Debug)]
 pub struct CharPicker {
     pub chars: CharMap,
-    pub selected: (u16, u16),
     pub page: u16,
 }
 
@@ -43,8 +42,7 @@ impl Default for CharPicker {
 
         Self {
             chars: map,
-            selected: (0, 0),
-            page: 0,
+            page: 3,
         }
     }
 }

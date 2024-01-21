@@ -1,13 +1,9 @@
-use crate::{
-    app::{App, Result},
-    utils::clicks::{ClickAction, Increment, SetValue},
-    TOOLBOX_WIDTH,
-};
+use crate::app::{App, Result};
+use crate::utils::clicks::{ClickAction, Increment, LayerAction, SetValue};
+use crate::TOOLBOX_WIDTH;
 use ansi_style::{BGColor, Color as AColor};
-use crossterm::event::{
-    KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
-    MouseEventKind::{Down, Drag},
-};
+use crossterm::event::MouseEventKind::{Down, Drag};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 use ratatui::style::Color;
 
 /// Handles the key events and updates the state of [`App`].
@@ -55,7 +51,7 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
         Down(btn) | Drag(btn) => {
             let x = event.column;
             let y = event.row;
-            if let Some(&action) = app.click_areas.get(&(x, y)) {
+            if let Some(action) = app.click_areas.get(&(x, y)).cloned() {
                 // If the action isnt a draw action and the event is a drag event
                 if action != ClickAction::Draw && kind == Drag(btn) {
                     // return early because we only want the canvas to respond to drag events
@@ -70,7 +66,8 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                 match action {
                     ClickAction::Draw => {
                         if kind == Down(btn) {
-                            app.undo_history.try_add_page();
+                            app.undo_history
+                                .try_add_page(app.canvas.current_layer_name());
                         }
 
                         let x = x - TOOLBOX_WIDTH;
@@ -100,6 +97,14 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                             },
                         },
                     },
+                    ClickAction::Layer(action) => match action {
+                        LayerAction::Add => app.canvas.add_layer(None),
+                        LayerAction::Remove(index) => app.canvas.remove_layer(index),
+                        LayerAction::Select(index) => app.canvas.select_layer(index),
+                        LayerAction::MoveUp(_index) => todo!(),
+                        LayerAction::MoveDown(_index) => todo!(),
+                        LayerAction::ToggleShow(index) => app.canvas.toggle_show(index),
+                    },
                     ClickAction::None => {}
                 }
             }
@@ -121,7 +126,7 @@ fn clip_brush(app: &mut App) {
 fn get_drawing_region(app: &App) -> Result<(u16, u16, u16, u16)> {
     let (mut left, mut bottom) = (u16::MAX, u16::MAX);
     let (mut right, mut top) = (u16::MIN, u16::MIN);
-    for &(x, y) in app.canvas.keys() {
+    for &(x, y) in app.canvas.render().keys() {
         left = left.min(x);
         right = right.max(x);
         bottom = bottom.min(y);
@@ -140,7 +145,7 @@ fn copy_canvas_text(app: &App) -> Result<()> {
     for y in bottom..=top {
         let mut line = String::with_capacity((right - left) as usize);
         for x in left..=right {
-            if let Some(cell) = app.canvas.get(&(x, y)) {
+            if let Some(cell) = app.canvas.render().get(&(x, y)) {
                 line += &cell.char();
             } else {
                 line += " ";
@@ -197,7 +202,7 @@ fn copy_canvas_ansi(app: &App) -> Result<()> {
     for y in bottom..=top {
         let mut line = String::new();
         for x in left..=right {
-            if let Some(cell) = app.canvas.get(&(x, y)) {
+            if let Some(cell) = app.canvas.render().get(&(x, y)) {
                 let (fg, bg) = get_ansi_colors(cell.fg, cell.bg);
                 let ansi = format!(
                     "{}{}{}{}{}",

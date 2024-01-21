@@ -1,33 +1,27 @@
 use std::marker::PhantomData;
 
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Stylize},
-    text::{Line, Span},
-    widgets::{
-        block::{Position, Title},
-        Block, BorderType, Borders, Padding, Paragraph,
-    },
-    Frame,
-};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Style, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::block::{Position, Title};
+use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph};
+use ratatui::Frame;
 
+use crate::app::App;
+use crate::utils::clicks::{ClickAction, Increment, LayerAction::*, SetValue};
+use crate::utils::tools::Tool;
 use crate::{
-    app::App,
-    utils::{
-        clicks::{ClickAction, Increment, SetValue},
-        tools::Tool,
-    },
-    BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, BUTTON_TEXT, BUTTON_TEXT_SEL, LOWER_BLOCK, TOOLBOX_BG,
+    BG, BG_DARK, BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, DARK_TEXT, LAYER_SELECTED, LOWER_BLOCK,
     TOOL_BORDER, UPPER_BLOCK,
 };
 
 pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
     let bar_block = Block::new()
-        .style(Style::new().bg(TOOLBOX_BG))
+        .style(Style::new().bg(BG))
         .borders(Borders::all())
         .border_type(BorderType::QuadrantInside)
-        .border_style(Style::new().fg(TOOLBOX_BG).bg(Color::Reset))
-        .title(" Toolbox ".fg(Color::Black).bg(Color::Yellow))
+        .border_style(Style::new().fg(BG).bg(Color::Reset))
+        .title(" Toolbox ".fg(DARK_TEXT).bg(Color::Yellow))
         .title_alignment(Alignment::Center);
 
     let bar_inner = bar_block.inner(area);
@@ -52,12 +46,22 @@ pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
     ToolPicker::render(app, f, bar_layout[1]);
     CharPicker::render(app, f, bar_layout[2]);
     ColorPalette::render(app, f, bar_layout[3]);
+    LayerManager::render(app, f, bar_layout[4]);
+
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::raw("Help: "),
+            Span::raw("? ").bold(),
+        ]))
+        .alignment(Alignment::Right),
+        bar_layout[5],
+    )
 }
 
 fn make_button(l: &str) -> Vec<Span> {
     vec![
         Span::from("▐").fg(BUTTON_COLOR),
-        Span::from(l).bg(BUTTON_COLOR).fg(BUTTON_TEXT),
+        Span::from(l).bg(BUTTON_COLOR).fg(DARK_TEXT),
         Span::from("▌").fg(BUTTON_COLOR),
     ]
 }
@@ -65,7 +69,7 @@ fn make_button(l: &str) -> Vec<Span> {
 fn make_button_sel(l: &str) -> Vec<Span> {
     vec![
         Span::from("▐").fg(BUTTON_COLOR_SEL),
-        Span::from(l).bg(BUTTON_COLOR_SEL).fg(BUTTON_TEXT_SEL),
+        Span::from(l).bg(BUTTON_COLOR_SEL).fg(DARK_TEXT),
         Span::from("▌").fg(BUTTON_COLOR_SEL),
     ]
 }
@@ -389,5 +393,83 @@ impl<'a> ColorPalette<'a> {
                 app.register_click_area(&area, ClickAction::Set(SetValue::Color(color)));
                 f.render_widget(color_pg, area);
             });
+    }
+}
+
+// ╭───────────────╮
+// │ Layer Manager │
+// ╰───────────────╯
+#[rustfmt::skip] struct LayerManager<'a> { marker: PhantomData<&'a Frame<'a>> }
+impl<'a> LayerManager<'a> {
+    fn render(app: &mut App, f: &mut Frame, area: Rect) {
+        let block = Self::outer_block(app, f, area);
+        Self::render_layers(app, f, block);
+    }
+
+    fn outer_block(app: &mut App, f: &mut Frame, area: Rect) -> Rect {
+        let block = Block::new()
+            .title(Title::from(" Layers ".bold()).alignment(Alignment::Center))
+            .title(Title::from(make_button("+")).alignment(Alignment::Right))
+            .padding(Padding::horizontal(1))
+            .borders(Borders::TOP | Borders::BOTTOM)
+            .border_style(Style::new().fg(TOOL_BORDER));
+
+        let add_layer_button = Rect {
+            height: 1,
+            width: 3,
+            x: area.width - 3,
+            ..area
+        };
+        app.register_click_area(&add_layer_button, ClickAction::Layer(Add));
+
+        let outer_block = block.inner(area);
+        f.render_widget(block, area);
+
+        outer_block
+    }
+
+    fn render_layers(app: &mut App, f: &mut Frame, area: Rect) {
+        let layers_count = app.canvas.layers.len();
+
+        let mut constraints = vec![Constraint::Length(1); layers_count];
+        constraints.push(Constraint::Min(0));
+
+        f.render_widget(Block::new().bg(BG_DARK), area);
+
+        let rows = Layout::new(Direction::Vertical, constraints).split(area);
+
+        let row = Layout::new(
+            Direction::Horizontal,
+            [
+                Constraint::Min(0),
+                Constraint::Max(3),
+                Constraint::Max(3),
+                Constraint::Max(3),
+                Constraint::Max(3),
+            ],
+        );
+
+        for (i, layer) in app.canvas.layers.clone().into_iter().rev().enumerate() {
+            let layer_row = row.split(rows[i]);
+
+            let index = layers_count - (i + 1);
+            // Selected layer background
+            if index == app.canvas.current {
+                f.render_widget(Block::new().bg(LAYER_SELECTED), rows[i]);
+            }
+
+            app.register_click_area(&layer_row[0], ClickAction::Layer(Select(index)));
+            f.render_widget(Paragraph::new(layer.name), layer_row[0]);
+
+            app.register_click_area(&layer_row[1], ClickAction::Layer(MoveUp(index)));
+            f.render_widget(Paragraph::new(Line::from(make_button("U"))), layer_row[1]);
+
+            f.render_widget(Paragraph::new(Line::from(make_button("D"))), layer_row[2]);
+
+            app.register_click_area(&layer_row[3], ClickAction::Layer(ToggleShow(index)));
+            f.render_widget(Paragraph::new(Line::from(make_button("S"))), layer_row[3]);
+
+            f.render_widget(Paragraph::new(Line::from(make_button("R"))), layer_row[4]);
+        }
     }
 }

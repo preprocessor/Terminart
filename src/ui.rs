@@ -1,10 +1,9 @@
-use ratatui::{
-    prelude::*,
-    widgets::{canvas::Canvas, Block, BorderType, Borders},
-};
+use ratatui::prelude::*;
+use ratatui::widgets::{canvas::Canvas, Block, BorderType, Borders};
 
 use crate::{
-    app::App, ui_help as help, ui_sidebar as sidebar, utils::clicks::ClickAction, TOOLBOX_WIDTH,
+    app::App, ui_help as help, ui_sidebar as sidebar, utils::clicks::ClickAction, DARK_TEXT,
+    TOOLBOX_WIDTH,
 };
 
 /// Renders the user interface widgets.
@@ -29,7 +28,7 @@ fn canvas(app: &mut App, f: &mut Frame, area: Rect) {
         .borders(Borders::all())
         .border_type(BorderType::Rounded)
         .title(" Canvas ")
-        .title_style(Style::new().bg(Color::Green).fg(Color::Black));
+        .title_style(Style::new().bg(Color::Green).fg(DARK_TEXT));
 
     let block_inner = block.inner(area);
     app.register_click_area(&block_inner, ClickAction::Draw);
@@ -43,6 +42,7 @@ fn canvas(app: &mut App, f: &mut Frame, area: Rect) {
         .paint(|c| {
             for (x, y, cell) in app
                 .canvas
+                .render()
                 .iter()
                 .map(|(&(x, y), cell)| (x as f64, y as f64, cell))
             {

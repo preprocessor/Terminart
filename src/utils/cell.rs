@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Style};
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Cell {
     pub fg: Color,
     pub bg: Color,
