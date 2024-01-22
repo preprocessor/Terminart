@@ -29,90 +29,108 @@ impl Layer {
 #[derive(Debug, Clone)]
 pub struct Layers {
     pub layers: Vec<Layer>,
-    pub current: usize,
+    pub selected: usize,
 }
 
 impl Default for Layers {
     fn default() -> Self {
         Self {
             layers: vec![Layer::new("Layer 1")],
-            current: 0,
+            selected: 0,
         }
     }
 }
 
 impl Layers {
-    fn check_current_pos(&mut self) {
+    /// Before you wreck self
+    /// This checks the [current] property against the amount of [Layers]
+    /// It will add a Layer if necessary
+    fn check_self(&mut self) {
         let len = self.layers.len();
-        if self.current >= len {
-            self.current = len - 1;
+
+        if self.layers.is_empty() {
+            self.add_layer(None);
+        }
+        if self.selected >= len {
+            self.selected = len.saturating_sub(1);
         }
     }
 
+    pub fn current_layer_visibile(&mut self) -> bool {
+        self.check_self();
+        self.layers[self.selected].show
+    }
+
     pub fn current_layer_mut(&mut self) -> &mut Layer {
-        self.check_current_pos();
-        &mut self.layers[self.current]
+        self.check_self();
+        &mut self.layers[self.selected]
     }
 
-    pub fn current_layer_name(&self) -> &str {
-        &self.layers[self.current].name
+    pub fn current_layer_name(&mut self) -> &str {
+        self.check_self();
+        &self.layers[self.selected].name
     }
 
-    // pub fn toggle_show(&mut self, layer_name: String) {
-    //     if let Some(layer) = self.layers.iter_mut().find(|l| l.name == layer_name) {
-    //         layer.toggle_show();
-    //     }
-    // }
-
-    pub fn toggle_show(&mut self, index: usize) {
-        if let Some(layer) = self.layers.get_mut(index) {
+    pub fn toggle_show(&mut self) {
+        if let Some(layer) = self.layers.get_mut(self.selected) {
             layer.toggle_show();
         }
     }
 
-    // pub fn remove_layer(&mut self, target_name: String) {
-    //     self.layers.retain(|l| l.name != target_name);
-    //
-    //     self.check_current_pos();
-    // }
-
-    pub fn remove_layer(&mut self, index: usize) {
-        self.layers.remove(index);
-        self.check_current_pos();
-    }
-
     pub fn add_layer(&mut self, name_mod: Option<usize>) {
-        let new_count = self.layers.len() + 1 + name_mod.unwrap_or(0);
+        let count_mod = name_mod.unwrap_or(0);
+        let new_count = self.layers.len() + 1 + count_mod;
 
         let new_layer_name = format!("Layer {}", new_count);
 
         if self.layers.iter().any(|l| l.name == new_layer_name) {
-            self.add_layer(Some(new_count + 1))
+            self.add_layer(Some(count_mod + 1))
         } else {
             self.layers.push(Layer::new(new_layer_name));
         }
     }
 
-    pub fn get_layer_mut(&mut self, target_name: String) -> Option<&mut Layer> {
-        self.layers.iter_mut().find(|l| l.name == target_name)
+    pub fn get_layer_mut(&mut self, target_name: String) -> &mut Layer {
+        let layer_index = self.layers.iter().position(|l| l.name == target_name);
+
+        match layer_index {
+            Some(index) => &mut self.layers[index],
+            None => {
+                self.layers.push(Layer::new(target_name));
+                #[allow(clippy::unwrap_used)]
+                self.layers.last_mut().unwrap()
+            }
+        }
     }
 
-    // pub fn select_layer(&mut self, target_name: String) {
-    //     if let Some(index) = self
-    //         .layers
-    //         .iter()
-    //         .enumerate()
-    //         .filter(|(_, l)| l.name == target_name)
-    //         .map(|(i, _)| i)
-    //         .next()
-    //     {
-    //         self.current = index;
-    //     }
-    // }
-    pub fn select_layer(&mut self, index: usize) {
-        self.current = index;
+    pub fn select_layer(&mut self, index: u8) {
+        self.selected = index as usize;
     }
 
+    /// Removes the currently selected layer
+    pub fn remove_layer(&mut self) -> Layer {
+        let layer = self.layers.remove(self.selected);
+        self.selected = self.selected.saturating_sub(1);
+        self.check_self();
+        layer
+    }
+
+    pub fn rename_layer(&mut self, _index: usize, _new_name: String) {}
+
+    pub fn move_layer_up(&mut self) {
+        let max_index = self.layers.len() - 1;
+        let new_index = (self.selected + 1).min(max_index);
+        self.layers.swap(self.selected, new_index);
+        self.selected = new_index;
+    }
+
+    pub fn move_layer_down(&mut self) {
+        let new_index = self.selected.saturating_sub(1);
+        self.layers.swap(self.selected, new_index);
+        self.selected = new_index;
+    }
+
+    /// Combine all of the layers to a final output
     pub fn render(&self) -> Page {
         self.layers
             .iter()

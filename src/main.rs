@@ -9,6 +9,7 @@ use term_art::tui::Tui;
 fn main() -> Result<()> {
     // Create an application.
     let mut app = App::new();
+    color_eyre::install()?;
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());

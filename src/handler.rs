@@ -1,5 +1,7 @@
 use crate::app::{App, Result};
+use crate::utils::cell::Cell;
 use crate::utils::clicks::{ClickAction, Increment, LayerAction, SetValue};
+use crate::utils::layer::Page;
 use crate::TOOLBOX_WIDTH;
 use ansi_style::{BGColor, Color as AColor};
 use crossterm::event::MouseEventKind::{Down, Drag};
@@ -34,7 +36,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
         KeyCode::Char('Y') => copy_canvas_text(app)?,
         KeyCode::Char('y') => copy_canvas_ansi(app)?,
         // Use clipboard to set brush char
-        KeyCode::Char('p' | 'P') => clip_brush(app),
+        KeyCode::Char('p') => clip_brush(app),
         // Help window
         KeyCode::Char('?') => app.toggle_help(),
         // Undo / Redo
@@ -71,6 +73,12 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                         }
 
                         let x = x - TOOLBOX_WIDTH;
+
+                        if kind == Down(MouseButton::Middle) {
+                            paste_into_canvas(app, x, y)?;
+                            return Ok(());
+                        }
+
                         let size = app.brush.size;
                         let tool = app.brush.tool;
 
@@ -99,11 +107,12 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                     },
                     ClickAction::Layer(action) => match action {
                         LayerAction::Add => app.canvas.add_layer(None),
-                        LayerAction::Remove(index) => app.canvas.remove_layer(index),
                         LayerAction::Select(index) => app.canvas.select_layer(index),
-                        LayerAction::MoveUp(_index) => todo!(),
-                        LayerAction::MoveDown(_index) => todo!(),
-                        LayerAction::ToggleShow(index) => app.canvas.toggle_show(index),
+                        LayerAction::Remove => app.remove_layer(),
+                        LayerAction::Rename => todo!("Rename layer"),
+                        LayerAction::MoveUp => app.canvas.move_layer_up(),
+                        LayerAction::MoveDown => app.canvas.move_layer_down(),
+                        LayerAction::ToggleVis => app.canvas.toggle_show(),
                     },
                     ClickAction::None => {}
                 }
@@ -121,46 +130,6 @@ fn clip_brush(app: &mut App) {
             app.brush.char = c;
         }
     }
-}
-
-fn get_drawing_region(app: &App) -> Result<(u16, u16, u16, u16)> {
-    let (mut left, mut bottom) = (u16::MAX, u16::MAX);
-    let (mut right, mut top) = (u16::MIN, u16::MIN);
-    for &(x, y) in app.canvas.render().keys() {
-        left = left.min(x);
-        right = right.max(x);
-        bottom = bottom.min(y);
-        top = top.max(y);
-    }
-    if left == u16::MAX || bottom == u16::MAX {
-        return Err("No keys".into());
-    }
-    Ok((left, right, bottom, top))
-}
-
-fn copy_canvas_text(app: &App) -> Result<()> {
-    let (left, right, bottom, top) = get_drawing_region(app)?;
-    let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
-
-    for y in bottom..=top {
-        let mut line = String::with_capacity((right - left) as usize);
-        for x in left..=right {
-            if let Some(cell) = app.canvas.render().get(&(x, y)) {
-                line += &cell.char();
-            } else {
-                line += " ";
-            }
-        }
-        lines_vec.push(line);
-    }
-
-    let output_str = lines_vec.join("\n");
-
-    if !output_str.is_empty() {
-        cli_clipboard::set_contents(output_str)?;
-    }
-
-    Ok(())
 }
 
 macro_rules! get_color {
@@ -195,16 +164,33 @@ const fn get_ansi_colors(fg: Color, bg: Color) -> (AColor, BGColor) {
     (ansi_fg, ansi_bg)
 }
 
+fn get_drawing_region(app: &App) -> Result<(u16, u16, u16, u16, Page)> {
+    let (mut left, mut bottom) = (u16::MAX, u16::MAX);
+    let (mut right, mut top) = (u16::MIN, u16::MIN);
+    let page = app.canvas.render();
+    for &(x, y) in page.keys() {
+        left = left.min(x);
+        right = right.max(x);
+        bottom = bottom.min(y);
+        top = top.max(y);
+    }
+    if left == u16::MAX || bottom == u16::MAX {
+        return Err("No keys".into());
+    }
+    Ok((left, right, bottom, top, page))
+}
+
 fn copy_canvas_ansi(app: &App) -> Result<()> {
-    let (left, right, bottom, top) = get_drawing_region(app)?;
+    let (left, right, bottom, top, page) = get_drawing_region(app)?;
     let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
 
     for y in bottom..=top {
         let mut line = String::new();
         for x in left..=right {
-            if let Some(cell) = app.canvas.render().get(&(x, y)) {
+            if let Some(cell) = page.get(&(x, y)) {
                 let (fg, bg) = get_ansi_colors(cell.fg, cell.bg);
-                let ansi = format!(
+
+                line += &format!(
                     "{}{}{}{}{}",
                     fg.open(),
                     bg.open(),
@@ -212,7 +198,6 @@ fn copy_canvas_ansi(app: &App) -> Result<()> {
                     fg.close(),
                     bg.close()
                 );
-                line += &ansi;
             } else {
                 line += " ";
             }
@@ -226,5 +211,49 @@ fn copy_canvas_ansi(app: &App) -> Result<()> {
         cli_clipboard::set_contents(output_str)?;
     }
 
+    Ok(())
+}
+
+fn copy_canvas_text(app: &App) -> Result<()> {
+    let (left, right, bottom, top, page) = get_drawing_region(app)?;
+    let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
+
+    for y in bottom..=top {
+        let mut line = String::with_capacity((right - left) as usize);
+        for x in left..=right {
+            if let Some(cell) = page.get(&(x, y)) {
+                line += &cell.char();
+            } else {
+                line += " ";
+            }
+        }
+        lines_vec.push(line);
+    }
+
+    let output_str = lines_vec.join("\n");
+
+    if !output_str.is_empty() {
+        cli_clipboard::set_contents(output_str)?;
+    }
+
+    Ok(())
+}
+
+fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> Result<()> {
+    let (x, y) = (x as i16, y as i16);
+    let clipboard = cli_clipboard::get_contents()?;
+    for (dy, row) in clipboard.split('\n').enumerate() {
+        for (dx, char) in row.chars().enumerate() {
+            let (dx, dy) = (dx as i16, dy as i16);
+            app.draw_cell(
+                x + dx,
+                y + dy,
+                Cell {
+                    char,
+                    ..Default::default()
+                },
+            );
+        }
+    }
     Ok(())
 }

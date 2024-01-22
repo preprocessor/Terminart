@@ -2,7 +2,8 @@ use ratatui::style::Color;
 
 use super::tools::Tool;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClickAction {
     None,
     Draw,
@@ -12,12 +13,14 @@ pub enum ClickAction {
     Layer(LayerAction),
 }
 
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Increment {
     CharPicker,
     BrushSize,
 }
 
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SetValue {
     Tool(Tool),
@@ -25,21 +28,14 @@ pub enum SetValue {
     Char(char), // 🦎🔥
 }
 
-// #[derive(Clone, Debug, PartialEq, Eq)]
-// pub enum LayerAction {
-//     Add,
-//     Remove(String),
-//     Select(String),
-//     MoveUp,
-//     MoveDown,
-//     ToggleShow(String),
-// }
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LayerAction {
     Add,
-    Remove(usize),
-    Select(usize),
-    MoveUp(usize),
-    MoveDown(usize),
-    ToggleShow(usize),
+    Remove,
+    Rename,
+    Select(u8),
+    MoveUp,
+    MoveDown,
+    ToggleVis,
 }

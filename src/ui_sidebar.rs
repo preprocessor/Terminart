@@ -31,7 +31,6 @@ pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
     let bar_layout = Layout::new(
         Direction::Vertical,
         [
-            // TODO: Add layers and help text
             Constraint::Max(3),  // 0: Brush info
             Constraint::Max(4),  // 1: Tools
             Constraint::Max(10), // 2: Char picker
@@ -211,21 +210,18 @@ impl<'a> ToolPicker<'a> {
         let row =
             Layout::new(Direction::Horizontal, vec![Constraint::Min(3); tool_amount]).split(area);
 
-        tools
-            .iter()
-            .zip(row.iter().take(tool_amount))
-            .for_each(|(&t, &area)| {
-                let c = t.char();
+        tools.iter().zip(row.iter()).for_each(|(&t, &area)| {
+            let c = t.char();
 
-                let button = Paragraph::new(Line::from(if current_tool == t {
-                    make_button_sel(&c)
-                } else {
-                    make_button(&c)
-                }));
+            let button = Paragraph::new(Line::from(if current_tool == t {
+                make_button_sel(&c)
+            } else {
+                make_button(&c)
+            }));
 
-                app.register_click_area(&area, ClickAction::Set(SetValue::Tool(t)));
-                f.render_widget(button, area);
-            });
+            app.register_click_area(&area, ClickAction::Set(SetValue::Tool(t)));
+            f.render_widget(button, area);
+        });
     }
 
     fn render_info(app: &App, f: &mut Frame, area: Rect) {
@@ -403,7 +399,14 @@ impl<'a> ColorPalette<'a> {
 impl<'a> LayerManager<'a> {
     fn render(app: &mut App, f: &mut Frame, area: Rect) {
         let block = Self::outer_block(app, f, area);
-        Self::render_layers(app, f, block);
+        let layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Max(1), Constraint::Min(0)],
+        )
+        .split(block);
+
+        Self::render_buttons(app, f, layout[0]);
+        Self::render_layers2(app, f, layout[1]);
     }
 
     fn outer_block(app: &mut App, f: &mut Frame, area: Rect) -> Rect {
@@ -428,24 +431,90 @@ impl<'a> LayerManager<'a> {
         outer_block
     }
 
-    fn render_layers(app: &mut App, f: &mut Frame, area: Rect) {
+    fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
+        let row_width = 15; // 3 * 5
+        let full_width = area.width;
+        let centered = Layout::new(
+            Direction::Horizontal,
+            [
+                Constraint::Length((full_width - row_width) / 2),
+                Constraint::Max(row_width),
+                Constraint::Length((full_width - row_width) / 2),
+            ],
+        )
+        .split(area)[1];
+        let row = Layout::new(Direction::Horizontal, [Constraint::Min(3); 5]).split(centered);
+
+        Self::delete_button(app, f, row[0]);
+        Self::rename_button(app, f, row[1]);
+        Self::up_button(app, f, row[2]);
+        Self::down_button(app, f, row[3]);
+
+        // // Visibility
+        app.register_click_area(&row[4], ClickAction::Layer(ToggleVis));
+        let visibility_char = if app.canvas.current_layer_visibile() {
+            "H"
+        } else {
+            "S"
+        };
+        f.render_widget(
+            Paragraph::new(Line::from(make_button(visibility_char))),
+            row[4],
+        );
+    }
+
+    fn render_layers2(app: &mut App, f: &mut Frame, area: Rect) {
         let layers_count = app.canvas.layers.len();
 
-        let mut constraints = vec![Constraint::Length(1); layers_count];
+        let mut constraints = vec![Constraint::Max(1); layers_count];
         constraints.push(Constraint::Min(0));
 
         f.render_widget(Block::new().bg(BG_DARK), area);
 
         let rows = Layout::new(Direction::Vertical, constraints).split(area);
 
+        // TODO: add buttons on the top that operate on the selected layer
+        //       vs. the layers each having buttons
+
+        for (i, layer) in app.canvas.layers.clone().into_iter().rev().enumerate() {
+            let index = layers_count - (i + 1);
+            let is_active_layer = index == app.canvas.selected;
+
+            // Selected layer background
+            if is_active_layer {
+                f.render_widget(Block::new().bg(LAYER_SELECTED), rows[i]);
+            } else {
+                app.register_click_area(&rows[i], ClickAction::Layer(Select(index as u8)));
+            }
+
+            // Layer
+            f.render_widget(Paragraph::new(layer.name), rows[i]);
+        }
+    }
+
+    fn render_layers(app: &mut App, f: &mut Frame, area: Rect) {
+        let layers_count = app.canvas.layers.len();
+
+        let mut constraints = vec![Constraint::Max(1); layers_count];
+        constraints.push(Constraint::Min(0));
+
+        f.render_widget(Block::new().bg(BG_DARK), area);
+
+        let rows = Layout::new(Direction::Vertical, constraints).split(area);
+
+        // TODO: add buttons on the top that operate on the selected layer
+        //       vs. the layers each having buttons
+
         let row = Layout::new(
             Direction::Horizontal,
             [
-                Constraint::Min(0),
-                Constraint::Max(3),
-                Constraint::Max(3),
-                Constraint::Max(3),
-                Constraint::Max(3),
+                Constraint::Min(0), // 0: Layer name
+                Constraint::Max(3), // 1: Delete layer
+                Constraint::Max(3), // 2: Rename layer
+                Constraint::Max(3), // 3: Move layer up
+                Constraint::Max(3), // 4: Move layer down
+                Constraint::Max(3), // 5: Visibility
+                Constraint::Max(3), // 6: Show / Hide buttons
             ],
         );
 
@@ -453,23 +522,53 @@ impl<'a> LayerManager<'a> {
             let layer_row = row.split(rows[i]);
 
             let index = layers_count - (i + 1);
+            let is_active_layer = index == app.canvas.selected;
+
             // Selected layer background
-            if index == app.canvas.current {
+            if is_active_layer {
                 f.render_widget(Block::new().bg(LAYER_SELECTED), rows[i]);
+            } else {
+                app.register_click_area(&rows[i], ClickAction::Layer(Select(index as u8)));
             }
 
-            app.register_click_area(&layer_row[0], ClickAction::Layer(Select(index)));
+            // Layer
             f.render_widget(Paragraph::new(layer.name), layer_row[0]);
-
-            app.register_click_area(&layer_row[1], ClickAction::Layer(MoveUp(index)));
-            f.render_widget(Paragraph::new(Line::from(make_button("U"))), layer_row[1]);
-
-            f.render_widget(Paragraph::new(Line::from(make_button("D"))), layer_row[2]);
-
-            app.register_click_area(&layer_row[3], ClickAction::Layer(ToggleShow(index)));
-            f.render_widget(Paragraph::new(Line::from(make_button("S"))), layer_row[3]);
-
-            f.render_widget(Paragraph::new(Line::from(make_button("R"))), layer_row[4]);
         }
     }
+
+    // fn name(app: &mut App, f: &mut Frame, area: Rect) {
+    //     app.register_click_area(&layer_row[0], ClickAction::Layer(Select(index)));
+    //     f.render_widget(Paragraph::new(layer.name), layer_row[0]);
+    // }
+
+    fn delete_button(app: &mut App, f: &mut Frame, area: Rect) {
+        app.register_click_area(&area, ClickAction::Layer(Remove));
+        f.render_widget(Paragraph::new(Line::from(make_button("X"))), area);
+    }
+
+    fn rename_button(app: &mut App, f: &mut Frame, area: Rect) {
+        app.register_click_area(&area, ClickAction::Layer(Rename));
+        f.render_widget(Paragraph::new(Line::from(make_button("R"))), area);
+    }
+
+    fn up_button(app: &mut App, f: &mut Frame, area: Rect) {
+        app.register_click_area(&area, ClickAction::Layer(MoveUp));
+        f.render_widget(Paragraph::new(Line::from(make_button("^"))), area);
+    }
+
+    fn down_button(app: &mut App, f: &mut Frame, area: Rect) {
+        app.register_click_area(&area, ClickAction::Layer(MoveDown));
+        f.render_widget(Paragraph::new(Line::from(make_button("v"))), area);
+    }
+
+    // fn vis_button(app: &mut App, f: &mut Frame, area: Rect) {
+    //     app.register_click_area(&layer_row[5], ClickAction::Layer(ToggleLayerVis(index)));
+    //     let visibility_char = if layer.show { "H" } else { "S" };
+    //     f.render_widget(
+    //         Paragraph::new(Line::from(make_button(visibility_char))),
+    //         layer_row[5],
+    //     );
+    // }
+    //
+    // fn buttons_toggle(app: &mut App, f: &mut Frame, area: Rect) {}
 }

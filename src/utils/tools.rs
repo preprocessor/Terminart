@@ -30,15 +30,15 @@ impl Tool {
 
     pub fn char(&self) -> String {
         match self {
-            Self::Eraser => 'x',
+            Self::Eraser => '×',
             Self::Square => '■',
             Self::Box => '□',
             Self::Disk => '●',
             Self::Circle => '○',
-            Self::Point => '·',
+            Self::Point => '∙',
             Self::Plus => '🞣',
             Self::Vertical => '|',
-            Self::Horizontal => '-',
+            Self::Horizontal => '─',
         }
         .to_string()
     }

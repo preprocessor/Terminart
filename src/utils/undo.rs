@@ -65,4 +65,8 @@ impl History {
     pub fn forget_redo(&mut self) {
         self.future.clear();
     }
+
+    pub fn add_removed_layer(&mut self, layer: Layer) {
+        self.past.push(layer);
+    }
 }
