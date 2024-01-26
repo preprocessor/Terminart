@@ -107,6 +107,12 @@ impl App {
         self.undo_history.add_removed_layer(layer);
     }
 
+    pub fn rename_layer(&mut self) {
+        if let Some(new_name) = self.input.accept() {
+            self.canvas.rename_layer(new_name);
+        }
+    }
+
     pub fn reset(&mut self) {
         // NOTE: Possibly remove this because layers make this a trivial task
 

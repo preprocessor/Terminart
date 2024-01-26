@@ -115,7 +115,10 @@ impl Layers {
         layer
     }
 
-    pub fn rename_layer(&mut self, _index: usize, _new_name: String) {}
+    pub fn rename_layer(&mut self, new_name: String) {
+        self.check_self();
+        self.layers[self.selected].name = new_name;
+    }
 
     pub fn move_layer_up(&mut self) {
         let max_index = self.layers.len() - 1;

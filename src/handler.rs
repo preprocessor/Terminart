@@ -1,7 +1,7 @@
 use crate::app::{App, Result};
 use crate::utils::cell::Cell;
 use crate::utils::clicks::{ClickAction, Increment, LayerAction, SetValue, TypingAction};
-use crate::utils::input::InputFocus;
+use crate::utils::input::InputMode;
 use crate::utils::layer::Page;
 use crate::TOOLBOX_WIDTH;
 use ansi_style::{BGColor, Color as AColor};
@@ -12,7 +12,7 @@ use ratatui::style::Color;
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
     match app.input.mode {
-        InputFocus::Normal => {
+        InputMode::Normal | InputMode::Help => {
             match key_event.code {
                 // Exit application on `ESC` or `Q`
                 KeyCode::Esc | KeyCode::Char('Q') => {
@@ -50,22 +50,23 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
         }
         _ => match key_event.code {
             KeyCode::Esc => {
-                app.input.mode = InputFocus::Normal;
+                app.input.mode = InputMode::Normal;
             }
-            KeyCode::Char('c' | 'C') => {
+            KeyCode::Char('c') => {
                 if key_event.modifiers == KeyModifiers::CONTROL {
                     app.quit();
                 } else {
-                    todo!("pass c through")
+                    app.input.add_char('c');
                 }
             }
-            KeyCode::Char(_char) => todo!(),
-            KeyCode::Backspace => todo!(),
-            KeyCode::Left => todo!(),
-            KeyCode::Right => todo!(),
-            KeyCode::Home => todo!(),
-            KeyCode::End => todo!(),
-            KeyCode::Enter => todo!(),
+            KeyCode::Char(ch) => app.input.add_char(ch),
+            KeyCode::Backspace => app.input.backspace(),
+            KeyCode::Delete => app.input.delete(),
+            KeyCode::Left => app.input.left(),
+            KeyCode::Right => app.input.right(),
+            KeyCode::Home => app.input.home(),
+            KeyCode::End => app.input.end(),
+            KeyCode::Enter => app.rename_layer(),
             _ => {}
         },
     }
@@ -73,105 +74,108 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
 }
 
 pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
-    let kind = event.kind;
     let x = event.column;
     let y = event.row;
 
     match app.input.mode {
-        InputFocus::Normal => {
-            match kind {
-                Up(_) => {
-                    // if event.modifiers != KeyModifiers::CONTROL {
-                    app.canvas.last_pos = None
-                    // }
-                }
-                Down(btn) => {
-                    if let Some(&action) = app.input.get(x, y) {
-                        // If the action isnt a draw action and the event is a drag event
-                        let count = match event.modifiers {
-                            KeyModifiers::CONTROL => 5,
-                            KeyModifiers::ALT => 2,
-                            _ => 1,
-                        };
-
-                        match action {
-                            ClickAction::Draw => {
-                                app.undo_history
-                                    .try_add_page(app.canvas.current_layer_name());
-
-                                if btn == MouseButton::Middle {
-                                    paste_into_canvas(app, x - TOOLBOX_WIDTH, y)?;
-                                    return Ok(());
-                                }
-
-                                draw(x, y, app);
-                            }
-                            ClickAction::Next(i) => match i {
-                                Increment::CharPicker => app.char_picker.next(),
-                                Increment::BrushSize => app.brush.up(count),
-                            },
-                            ClickAction::Prev(i) => match i {
-                                Increment::CharPicker => app.char_picker.prev(),
-                                Increment::BrushSize => app.brush.down(count),
-                            },
-                            ClickAction::Set(v) => match v {
-                                SetValue::Tool(t) => app.brush.tool = t,
-                                SetValue::Char(char) => app.brush.char = char,
-                                SetValue::Color(color) => match btn {
-                                    MouseButton::Left => app.brush.fg = color,
-                                    MouseButton::Right => app.brush.bg = color,
-                                    MouseButton::Middle => match color {
-                                        c if c == app.brush.fg => app.brush.fg = Color::Reset,
-                                        c if c == app.brush.bg => app.brush.bg = Color::Reset,
-                                        _ => {}
-                                    },
-                                },
-                            },
-                            ClickAction::Layer(action) => match action {
-                                LayerAction::Add => app.canvas.add_layer(None),
-                                LayerAction::Select(index) => app.canvas.select_layer(index),
-                                LayerAction::Remove => app.remove_layer(),
-                                LayerAction::Rename => {
-                                    app.input.mode = InputFocus::Rename;
-                                    // todo!("Rename layer")
-                                }
-                                LayerAction::MoveUp => app.canvas.move_layer_up(),
-                                LayerAction::MoveDown => app.canvas.move_layer_down(),
-                                LayerAction::ToggleVis(index) => app.canvas.toggle_show(index),
-                            },
-                            ClickAction::Typing(_) => {}
-                        }
+        InputMode::Rename | InputMode::Color => {
+            if event.kind == Down(MouseButton::Left) {
+                if let Some(ClickAction::Typing(action)) = app.input.get(x, y) {
+                    match action {
+                        TypingAction::Accept => app.rename_layer(),
+                        TypingAction::Exit => app.input.exit(),
+                        TypingAction::Nothing => {}
                     }
+                } else {
+                    app.input.exit();
+                    normal_mouse_mode(event, app)?;
                 }
+            }
+        }
+        InputMode::Normal | InputMode::Help => {
+            normal_mouse_mode(event, app)?;
+        }
+    }
+    Ok(())
+}
 
-                Drag(MouseButton::Left | MouseButton::Right) => {
-                    if let Some(&action) = app.input.get(x, y) {
-                        // If the action isnt a draw action
-                        if action != ClickAction::Draw {
-                            // return early because we only want the canvas to respond to drag events
+fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
+    let x = event.column;
+    let y = event.row;
+
+    match event.kind {
+        Up(_) => {
+            // if event.modifiers != KeyModifiers::CONTROL {
+            app.canvas.last_pos = None
+            // }
+        }
+        Down(btn) => {
+            if let Some(&action) = app.input.get(x, y) {
+                let count = match event.modifiers {
+                    KeyModifiers::CONTROL => 5,
+                    KeyModifiers::ALT => 2,
+                    _ => 1,
+                };
+
+                match action {
+                    ClickAction::Draw => {
+                        app.undo_history
+                            .try_add_page(app.canvas.current_layer_name());
+
+                        if btn == MouseButton::Middle {
+                            paste_into_canvas(app, x - TOOLBOX_WIDTH, y)?;
                             return Ok(());
                         }
 
                         draw(x, y, app);
                     }
+                    ClickAction::Next(i) => match i {
+                        Increment::CharPicker => app.char_picker.next(),
+                        Increment::BrushSize => app.brush.up(count),
+                    },
+                    ClickAction::Prev(i) => match i {
+                        Increment::CharPicker => app.char_picker.prev(),
+                        Increment::BrushSize => app.brush.down(count),
+                    },
+                    ClickAction::Set(v) => match v {
+                        SetValue::Tool(t) => app.brush.tool = t,
+                        SetValue::Char(char) => app.brush.char = char,
+                        SetValue::Color(color) => match btn {
+                            MouseButton::Left => app.brush.fg = color,
+                            MouseButton::Right => app.brush.bg = color,
+                            MouseButton::Middle => match color {
+                                c if c == app.brush.fg => app.brush.fg = Color::Reset,
+                                c if c == app.brush.bg => app.brush.bg = Color::Reset,
+                                _ => {}
+                            },
+                        },
+                    },
+                    ClickAction::Layer(action) => match action {
+                        LayerAction::Add => app.canvas.add_layer(None),
+                        LayerAction::Select(index) => app.canvas.select_layer(index),
+                        LayerAction::Remove => app.remove_layer(),
+                        LayerAction::Rename => app.input.rename(),
+                        LayerAction::MoveUp => app.canvas.move_layer_up(),
+                        LayerAction::MoveDown => app.canvas.move_layer_down(),
+                        LayerAction::ToggleVis(index) => app.canvas.toggle_show(index),
+                    },
+                    ClickAction::Typing(_) => {}
                 }
-                _ => {}
             }
         }
-        _ => match app.input.get(x, y) {
-            None => {
-                app.input.mode = InputFocus::Normal;
+
+        Drag(MouseButton::Left | MouseButton::Right) => {
+            if let Some(&action) = app.input.get(x, y) {
+                // If the action isnt a draw action
+                if action != ClickAction::Draw {
+                    // return early because we only want draw to respond to drag events
+                    return Ok(());
+                }
+
+                draw(x, y, app);
             }
-            Some(&action) => {
-                if let ClickAction::Typing(action) = action {
-                    match action {
-                        TypingAction::Accept => todo!(),
-                        TypingAction::Nothing => todo!(),
-                        TypingAction::Exit => todo!(),
-                    }
-                };
-            }
-        },
+        }
+        _ => {}
     }
     Ok(())
 }

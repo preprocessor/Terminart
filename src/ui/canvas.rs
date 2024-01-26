@@ -8,7 +8,7 @@ use ratatui::{
 
 use crate::{
     app::App,
-    utils::{clicks::ClickAction, input::InputFocus},
+    utils::{clicks::ClickAction, input::InputMode},
     DARK_TEXT,
 };
 
@@ -21,7 +21,7 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
 
     let block_inner = block.inner(area);
     app.input
-        .register_click(&block_inner, ClickAction::Draw, InputFocus::Normal);
+        .register_click(&block_inner, ClickAction::Draw, InputMode::Normal);
 
     let width = block_inner.width as f64;
     let height = block_inner.height as f64;

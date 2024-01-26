@@ -1,15 +1,16 @@
+// TODO: ADD STATEFUL WIDGETS
+mod canvas;
+pub mod help;
+pub mod rename;
+pub mod sidebar;
+
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     Frame,
 };
 
-use crate::utils::input::InputFocus;
+use crate::utils::input::InputMode;
 use crate::{app::App, TOOLBOX_WIDTH};
-
-mod canvas;
-pub mod help;
-pub mod rename;
-pub mod sidebar;
 
 pub fn render(app: &mut App, f: &mut Frame) {
     let main_layout = Layout::new(
@@ -22,9 +23,9 @@ pub fn render(app: &mut App, f: &mut Frame) {
     canvas::render(app, f, main_layout[1]);
 
     match app.input.mode {
-        InputFocus::Rename => rename::show(app, f, main_layout[1]),
-        InputFocus::Color => todo!("Color picker popup"),
-        InputFocus::Help => help::show(f),
-        InputFocus::Normal => {}
+        InputMode::Rename => rename::show(app, f, main_layout[1]),
+        InputMode::Color => todo!("Color picker popup"),
+        InputMode::Help => help::show(f),
+        InputMode::Normal => {}
     };
 }

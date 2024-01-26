@@ -13,7 +13,7 @@ use crate::utils::clicks::{
     LayerAction::{self, *},
     SetValue,
 };
-use crate::utils::input::InputFocus;
+use crate::utils::input::InputMode;
 use crate::utils::tools::Tool;
 use crate::{
     BG, BG_2, BG_DARK, BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, DARK_TEXT, LAYER_SELECTED,
@@ -102,8 +102,8 @@ impl<'a> BrushInfo<'a> {
 
     fn block(f: &mut Frame, area: Rect) -> Rect {
         let brush_block = Block::new()
-            .title("Brush ")
-            .title_style(Style::new().bold())
+            .title("Brush info ".bold())
+            .title(Title::from("┄┈ ").alignment(Alignment::Right))
             .borders(Borders::TOP)
             .border_style(Style::new().fg(TOOL_BORDER));
 
@@ -142,14 +142,14 @@ impl<'a> BrushInfo<'a> {
         app.input.register_click(
             &size_down_area,
             ClickAction::Prev(Increment::BrushSize),
-            InputFocus::Normal,
+            InputMode::Normal,
         );
         f.render_widget(size_down_button, size_down_area);
 
         app.input.register_click(
             &size_up_area,
             ClickAction::Next(Increment::BrushSize),
-            InputFocus::Normal,
+            InputMode::Normal,
         );
         f.render_widget(size_up_button, size_up_area);
     }
@@ -240,7 +240,7 @@ impl<'a> ToolPicker<'a> {
             app.input.register_click(
                 &area,
                 ClickAction::Set(SetValue::Tool(t)),
-                InputFocus::Normal,
+                InputMode::Normal,
             );
             f.render_widget(button, area);
         });
@@ -290,12 +290,12 @@ impl<'a> CharPicker<'a> {
         app.input.register_click(
             &page_prev_button,
             ClickAction::Prev(Increment::CharPicker),
-            InputFocus::Normal,
+            InputMode::Normal,
         );
         app.input.register_click(
             &page_next_button,
             ClickAction::Next(Increment::CharPicker),
-            InputFocus::Normal,
+            InputMode::Normal,
         );
 
         let outer_block = block.inner(area);
@@ -359,7 +359,7 @@ impl<'a> CharPicker<'a> {
                 app.input.register_click(
                     &area,
                     ClickAction::Set(SetValue::Char(c)),
-                    InputFocus::Normal,
+                    InputMode::Normal,
                 );
                 f.render_widget(button, area);
             });
@@ -425,7 +425,7 @@ impl<'a> ColorPalette<'a> {
                 app.input.register_click(
                     &area,
                     ClickAction::Set(SetValue::Color(color)),
-                    InputFocus::Normal,
+                    InputMode::Normal,
                 );
                 f.render_widget(color_pg, area);
             });
@@ -466,7 +466,7 @@ impl<'a> LayerManager<'a> {
         app.input.register_click(
             &add_layer_button,
             ClickAction::Layer(Add),
-            InputFocus::Normal,
+            InputMode::Normal,
         );
 
         let outer_block = block.inner(area);
@@ -523,7 +523,7 @@ impl<'a> LayerManager<'a> {
                 app.input.register_click(
                     &rows[i],
                     ClickAction::Layer(Select(index as u8)),
-                    InputFocus::Normal,
+                    InputMode::Normal,
                 );
             }
 
@@ -537,7 +537,7 @@ impl<'a> LayerManager<'a> {
             app.input.register_click(
                 &row[1],
                 ClickAction::Layer(ToggleVis(index as u8)),
-                InputFocus::Normal,
+                InputMode::Normal,
             );
             let btn = if show {
                 Button::normal("Hide")
@@ -569,7 +569,7 @@ impl<'a> LayerManager<'a> {
 
     fn base_button(app: &mut App, f: &mut Frame, area: Rect, action: LayerAction, label: &str) {
         app.input
-            .register_click(&area, ClickAction::Layer(action), InputFocus::Normal);
+            .register_click(&area, ClickAction::Layer(action), InputMode::Normal);
         f.render_widget(Paragraph::new(Line::from(Button::normal(label))), area);
     }
 }
