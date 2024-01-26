@@ -2,6 +2,7 @@ pub mod brush;
 pub mod cell;
 pub mod charpicker;
 pub mod clicks;
+pub mod input;
 pub mod layer;
 pub mod palette;
 pub mod shapes;

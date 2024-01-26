@@ -6,17 +6,19 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
-ahash = "0.8.7"
 ansi-style = "1.2.0"
+better-panic = "0.3.0"
 cli-clipboard = "0.4.0"
 color-eyre = "0.6.2"
 crossterm = "0.27.0"
+hashbrown = "0.14.3"
 ratatui = "0.25.0"
 strum = { version = "0.25", features = ["derive"] }
+tui-input = "0.8.0"
 
-[profile.release]
-opt-level = 'z'
-lto = true
-codegen-units = 1
-panic = 'abort'
-strip = "symbols"
+# [profile.release]
+# opt-level = 'z'
+# lto = true
+# codegen-units = 1
+# panic = 'abort'
+# strip = "symbols"

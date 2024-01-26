@@ -5,12 +5,12 @@ use super::tools::Tool;
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClickAction {
-    None,
     Draw,
     Prev(Increment),
     Next(Increment),
     Set(SetValue),
     Layer(LayerAction),
+    Typing(TypingAction),
 }
 
 #[repr(u8)]
@@ -37,5 +37,13 @@ pub enum LayerAction {
     Select(u8),
     MoveUp,
     MoveDown,
-    ToggleVis,
+    ToggleVis(u8),
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TypingAction {
+    Accept,
+    Nothing,
+    Exit,
 }

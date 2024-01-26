@@ -2,6 +2,9 @@ use ratatui::style::{Color, Style};
 
 use super::{cell::Cell, tools::Tool};
 
+const BRUSH_MIN: u16 = 1;
+const BRUSH_MAX: u16 = 21;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Brush {
     pub size: u16,
@@ -28,6 +31,8 @@ impl Brush {
         Style::new().fg(self.fg).bg(self.bg)
     }
 
+    #[rustfmt::skip]    pub fn char(&self) -> String { self.char.to_string() }
+
     pub const fn as_cell(&self) -> Cell {
         Cell {
             fg: self.fg,
@@ -36,5 +41,11 @@ impl Brush {
         }
     }
 
-    #[rustfmt::skip]    pub fn char(&self) -> String { self.char.to_string() }
+    pub fn down(&mut self, val: u16) {
+        self.size = self.size.saturating_sub(val).max(BRUSH_MIN);
+    }
+
+    pub fn up(&mut self, val: u16) {
+        self.size = (self.size + val).min(BRUSH_MAX);
+    }
 }

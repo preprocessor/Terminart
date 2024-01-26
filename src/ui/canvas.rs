@@ -1,29 +1,18 @@
-use ratatui::prelude::*;
-use ratatui::widgets::{canvas::Canvas, Block, BorderType, Borders};
-
-use crate::{
-    app::App, ui_help as help, ui_sidebar as sidebar, utils::clicks::ClickAction, DARK_TEXT,
-    TOOLBOX_WIDTH,
+use ratatui::{
+    layout::Rect,
+    style::{Color, Style},
+    text::Span,
+    widgets::{canvas::Canvas, Block, BorderType, Borders},
+    Frame,
 };
 
-/// Renders the user interface widgets.
-pub fn render(app: &mut App, f: &mut Frame) {
-    let main_layout = Layout::new(
-        Direction::Horizontal,
-        [Constraint::Max(TOOLBOX_WIDTH), Constraint::Min(0)],
-    )
-    .split(f.size());
+use crate::{
+    app::App,
+    utils::{clicks::ClickAction, input::InputFocus},
+    DARK_TEXT,
+};
 
-    sidebar::show(app, f, main_layout[0]);
-
-    canvas(app, f, main_layout[1]);
-
-    if app.needs_help {
-        help::show(f);
-    }
-}
-
-fn canvas(app: &mut App, f: &mut Frame, area: Rect) {
+pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let block = Block::new()
         .borders(Borders::all())
         .border_type(BorderType::Rounded)
@@ -31,7 +20,8 @@ fn canvas(app: &mut App, f: &mut Frame, area: Rect) {
         .title_style(Style::new().bg(Color::Green).fg(DARK_TEXT));
 
     let block_inner = block.inner(area);
-    app.register_click_area(&block_inner, ClickAction::Draw);
+    app.input
+        .register_click(&block_inner, ClickAction::Draw, InputFocus::Normal);
 
     let width = block_inner.width as f64;
     let height = block_inner.height as f64;

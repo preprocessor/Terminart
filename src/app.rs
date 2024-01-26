@@ -1,30 +1,18 @@
-use std::error;
-
-use ahash::AHashMap;
-use ratatui::layout::Rect;
-
-use crate::{
-    utils::{
-        brush::Brush, cell::Cell, charpicker::CharPicker, clicks::ClickAction, layer::Layers,
-        palette::Palette, undo::History,
-    },
-    BRUSH_MAX, BRUSH_MIN,
-};
+use crate::utils::{brush, cell::Cell, charpicker, input, layer, palette, undo};
 
 /// Application result type.
-pub type Result<T> = color_eyre::Result<T, Box<dyn error::Error>>;
+pub type Result<T> = color_eyre::Result<T, Box<dyn std::error::Error>>;
 
 /// Application.
 #[derive(Default, Debug)]
 pub struct App {
     pub running: bool,
-    pub needs_help: bool,
-    pub canvas: Layers,
-    pub click_areas: AHashMap<(u16, u16), ClickAction>,
-    pub undo_history: History,
-    pub palette: Palette,
-    pub char_picker: CharPicker,
-    pub brush: Brush,
+    pub canvas: layer::Layers,
+    pub input: input::Input,
+    pub undo_history: undo::History,
+    pub palette: palette::Palette,
+    pub char_picker: charpicker::CharPicker,
+    pub brush: brush::Brush,
 }
 
 impl App {
@@ -44,24 +32,9 @@ impl App {
         self.running = false;
     }
 
-    pub fn toggle_help(&mut self) {
-        self.needs_help = !self.needs_help;
-    }
-
-    pub fn register_click_area(&mut self, area: &Rect, action: ClickAction) {
-        let (left, top) = (area.x, area.y);
-        let right = left + area.width;
-        let bottom = top + area.height;
-
-        for y in top..bottom {
-            for x in left..right {
-                self.click_areas.insert((x, y), action);
-            }
-        }
-    }
-
     // Drawing functions {
     pub fn resize(&mut self, _width: u16, _height: u16) {
+        self.input.clear();
         // let new_size = (width * height) as usize;
         // self.canvas.shrink_to(new_size);
         // self.canvas.reserve(new_size);
@@ -105,7 +78,7 @@ impl App {
 
     pub fn undo(&mut self) {
         if let Some(undo_page) = self.undo_history.undo() {
-            let layer = self.canvas.get_layer_mut(undo_page.name.clone());
+            let layer = self.canvas.get_layer_mut(&undo_page.name);
             for ((x, y), cell) in undo_page.data {
                 let old_cell = layer.data.insert((x, y), cell).unwrap_or(Cell::empty());
 
@@ -116,7 +89,7 @@ impl App {
 
     pub fn redo(&mut self) {
         if let Some(redo_page) = self.undo_history.redo() {
-            let canvas_layer = self.canvas.get_layer_mut(redo_page.name.clone());
+            let canvas_layer = self.canvas.get_layer_mut(&redo_page.name);
             for ((x, y), cell) in redo_page.data {
                 let old_cell = canvas_layer
                     .data
@@ -143,31 +116,19 @@ impl App {
     }
 
     // Palette functions {
-    pub fn palette_next_fg(&mut self) {
+    pub fn brush_next_fg(&mut self) {
         self.brush.fg = self.palette.fg_next();
     }
 
-    pub fn palette_prev_fg(&mut self) {
+    pub fn brush_prev_fg(&mut self) {
         self.brush.fg = self.palette.fg_prev();
     }
 
-    pub fn palette_next_bg(&mut self) {
+    pub fn brush_next_bg(&mut self) {
         self.brush.bg = self.palette.bg_next();
     }
 
-    pub fn palette_prev_bg(&mut self) {
+    pub fn brush_prev_bg(&mut self) {
         self.brush.bg = self.palette.bg_prev();
     }
-
-    // }
-
-    // Brush functions {
-    pub fn brush_down(&mut self, val: u16) {
-        self.brush.size = self.brush.size.saturating_sub(val).max(BRUSH_MIN);
-    }
-
-    pub fn brush_up(&mut self, val: u16) {
-        self.brush.size = (self.brush.size + val).min(BRUSH_MAX);
-    }
-    // }
 }

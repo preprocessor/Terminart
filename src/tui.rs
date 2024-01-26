@@ -1,6 +1,7 @@
 use crate::app::{App, Result};
 use crate::event::EventHandler;
 use crate::ui;
+use better_panic::Settings;
 use crossterm::event::{
     DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
 };
@@ -8,7 +9,6 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::backend::Backend;
 use ratatui::Terminal;
 use std::io;
-use std::panic;
 
 /// Representation of a terminal user interface.
 ///
@@ -42,17 +42,41 @@ impl<B: Backend> Tui<B> {
 
         // Define a custom panic hook to reset the terminal properties.
         // This way, you won't have your terminal messed up if an unexpected error happens.
-        let panic_hook = panic::take_hook();
-        panic::set_hook(Box::new(move |panic| {
+        std::panic::set_hook(Box::new(|panic_info| {
             #[allow(clippy::expect_used)]
             Self::reset().expect("failed to reset the terminal");
-            panic_hook(panic);
+            Settings::auto()
+                .most_recent_first(false)
+                .lineno_suffix(true)
+                .create_panic_handler()(panic_info);
         }));
 
         self.terminal.hide_cursor()?;
         self.terminal.clear()?;
         Ok(())
     }
+    // pub fn init(&mut self) -> Result<()> {
+    //     terminal::enable_raw_mode()?;
+    //     crossterm::execute!(
+    //         io::stderr(),
+    //         EnterAlternateScreen,
+    //         EnableMouseCapture,
+    //         EnableBracketedPaste
+    //     )?;
+    //
+    //     // Define a custom panic hook to reset the terminal properties.
+    //     // This way, you won't have your terminal messed up if an unexpected error happens.
+    //     let panic_hook = panic::take_hook();
+    //     panic::set_hook(Box::new(move |panic| {
+    //         #[allow(clippy::expect_used)]
+    //         Self::reset().expect("failed to reset the terminal");
+    //         panic_hook(panic);
+    //     }));
+    //
+    //     self.terminal.hide_cursor()?;
+    //     self.terminal.clear()?;
+    //     Ok(())
+    // }
 
     /// [`Draw`] the terminal interface by [`rendering`] the widgets.
     ///

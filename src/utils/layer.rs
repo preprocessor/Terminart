@@ -1,8 +1,6 @@
-use ahash::AHashMap;
-
 use super::cell::Cell;
 
-pub type Page = AHashMap<(u16, u16), Cell>;
+pub type Page = hashbrown::HashMap<(u16, u16), Cell>;
 
 #[derive(Debug, Clone)]
 pub struct Layer {
@@ -29,6 +27,7 @@ impl Layer {
 #[derive(Debug, Clone)]
 pub struct Layers {
     pub layers: Vec<Layer>,
+    pub last_pos: Option<(u16, u16)>,
     pub selected: usize,
 }
 
@@ -37,6 +36,7 @@ impl Default for Layers {
         Self {
             layers: vec![Layer::new("Layer 1")],
             selected: 0,
+            last_pos: None,
         }
     }
 }
@@ -71,8 +71,8 @@ impl Layers {
         &self.layers[self.selected].name
     }
 
-    pub fn toggle_show(&mut self) {
-        if let Some(layer) = self.layers.get_mut(self.selected) {
+    pub fn toggle_show(&mut self, index: u8) {
+        if let Some(layer) = self.layers.get_mut(index as usize) {
             layer.toggle_show();
         }
     }
@@ -90,7 +90,7 @@ impl Layers {
         }
     }
 
-    pub fn get_layer_mut(&mut self, target_name: String) -> &mut Layer {
+    pub fn get_layer_mut(&mut self, target_name: &str) -> &mut Layer {
         let layer_index = self.layers.iter().position(|l| l.name == target_name);
 
         match layer_index {
@@ -128,6 +128,13 @@ impl Layers {
         let new_index = self.selected.saturating_sub(1);
         self.layers.swap(self.selected, new_index);
         self.selected = new_index;
+    }
+
+    pub fn get_info(&self) -> Vec<(String, bool)> {
+        self.layers
+            .iter()
+            .map(|l| (l.name.clone(), l.show))
+            .collect()
     }
 
     /// Combine all of the layers to a final output

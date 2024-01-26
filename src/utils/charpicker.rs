@@ -1,6 +1,4 @@
-use ahash::AHashMap;
-
-pub type CharMap = AHashMap<(u16, u16), char>;
+pub type CharMap = hashbrown::HashMap<(u16, u16), char>;
 
 #[derive(Clone, Debug)]
 pub struct CharPicker {

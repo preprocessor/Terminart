@@ -8,14 +8,19 @@ use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph};
 use ratatui::Frame;
 
 use crate::app::App;
-use crate::utils::clicks::{ClickAction, Increment, LayerAction::*, SetValue};
+use crate::utils::clicks::{
+    ClickAction, Increment,
+    LayerAction::{self, *},
+    SetValue,
+};
+use crate::utils::input::InputFocus;
 use crate::utils::tools::Tool;
 use crate::{
-    BG, BG_DARK, BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, DARK_TEXT, LAYER_SELECTED, LOWER_BLOCK,
-    TOOL_BORDER, UPPER_BLOCK,
+    BG, BG_2, BG_DARK, BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, DARK_TEXT, LAYER_SELECTED,
+    LOWER_BLOCK, TOOL_BORDER, UPPER_BLOCK,
 };
 
-pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
+pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let bar_block = Block::new()
         .style(Style::new().bg(BG))
         .borders(Borders::all())
@@ -36,7 +41,7 @@ pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
             Constraint::Max(10), // 2: Char picker
             Constraint::Max(6),  // 3: Palette
             Constraint::Min(0),  // 4: Layers
-            Constraint::Max(1),  // 5: Help area
+            Constraint::Max(1),  // 5: Help text
         ],
     )
     .split(bar_inner);
@@ -57,20 +62,23 @@ pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
     )
 }
 
-fn make_button(l: &str) -> Vec<Span> {
-    vec![
-        Span::from("▐").fg(BUTTON_COLOR),
-        Span::from(l).bg(BUTTON_COLOR).fg(DARK_TEXT),
-        Span::from("▌").fg(BUTTON_COLOR),
-    ]
-}
+struct Button;
+impl Button {
+    pub fn custom(label: &str, bg: Color, fg: Color) -> Vec<Span> {
+        vec![
+            Span::from("▐").fg(bg),
+            Span::from(label).bg(bg).fg(fg),
+            Span::from("▌").fg(bg),
+        ]
+    }
 
-fn make_button_sel(l: &str) -> Vec<Span> {
-    vec![
-        Span::from("▐").fg(BUTTON_COLOR_SEL),
-        Span::from(l).bg(BUTTON_COLOR_SEL).fg(DARK_TEXT),
-        Span::from("▌").fg(BUTTON_COLOR_SEL),
-    ]
+    pub fn normal(label: &str) -> Vec<Span> {
+        Self::custom(label, BUTTON_COLOR, DARK_TEXT)
+    }
+
+    pub fn selected(label: &str) -> Vec<Span> {
+        Self::custom(label, BUTTON_COLOR_SEL, DARK_TEXT)
+    }
 }
 
 // ╭────────────╮
@@ -128,13 +136,21 @@ impl<'a> BrushInfo<'a> {
         let size_down_area = size_button_layout[0];
         let size_up_area = size_button_layout[2];
 
-        let size_down_button = Paragraph::new(Line::from(make_button("-")));
-        let size_up_button = Paragraph::new(Line::from(make_button("+")));
+        let size_down_button = Paragraph::new(Line::from(Button::normal("-")));
+        let size_up_button = Paragraph::new(Line::from(Button::normal("+")));
 
-        app.register_click_area(&size_down_area, ClickAction::Prev(Increment::BrushSize));
+        app.input.register_click(
+            &size_down_area,
+            ClickAction::Prev(Increment::BrushSize),
+            InputFocus::Normal,
+        );
         f.render_widget(size_down_button, size_down_area);
 
-        app.register_click_area(&size_up_area, ClickAction::Next(Increment::BrushSize));
+        app.input.register_click(
+            &size_up_area,
+            ClickAction::Next(Increment::BrushSize),
+            InputFocus::Normal,
+        );
         f.render_widget(size_up_button, size_up_area);
     }
 
@@ -213,13 +229,19 @@ impl<'a> ToolPicker<'a> {
         tools.iter().zip(row.iter()).for_each(|(&t, &area)| {
             let c = t.char();
 
-            let button = Paragraph::new(Line::from(if current_tool == t {
-                make_button_sel(&c)
+            let btn = if current_tool == t {
+                Button::selected(&c)
             } else {
-                make_button(&c)
-            }));
+                Button::normal(&c)
+            };
 
-            app.register_click_area(&area, ClickAction::Set(SetValue::Tool(t)));
+            let button = Paragraph::new(Line::from(btn));
+
+            app.input.register_click(
+                &area,
+                ClickAction::Set(SetValue::Tool(t)),
+                InputFocus::Normal,
+            );
             f.render_widget(button, area);
         });
     }
@@ -249,8 +271,8 @@ impl<'a> CharPicker<'a> {
     fn outer_block(app: &mut App, f: &mut Frame, area: Rect) -> Rect {
         let block = Block::new()
             .title(Title::from(" Character Select ".bold()).alignment(Alignment::Center))
-            .title(Title::from(make_button("<")).alignment(Alignment::Left))
-            .title(Title::from(make_button(">")).alignment(Alignment::Right))
+            .title(Title::from(Button::normal("<")).alignment(Alignment::Left))
+            .title(Title::from(Button::normal(">")).alignment(Alignment::Right))
             .padding(Padding::horizontal(1))
             .borders(Borders::TOP)
             .border_style(Style::new().fg(TOOL_BORDER));
@@ -265,8 +287,16 @@ impl<'a> CharPicker<'a> {
             x: area.width - 3,
             ..page_prev_button
         };
-        app.register_click_area(&page_prev_button, ClickAction::Prev(Increment::CharPicker));
-        app.register_click_area(&page_next_button, ClickAction::Next(Increment::CharPicker));
+        app.input.register_click(
+            &page_prev_button,
+            ClickAction::Prev(Increment::CharPicker),
+            InputFocus::Normal,
+        );
+        app.input.register_click(
+            &page_next_button,
+            ClickAction::Next(Increment::CharPicker),
+            InputFocus::Normal,
+        );
 
         let outer_block = block.inner(area);
         f.render_widget(block, area);
@@ -318,13 +348,19 @@ impl<'a> CharPicker<'a> {
                     c.to_string()
                 };
 
-                let button = Paragraph::new(Line::from(if app.brush.char == c {
-                    make_button_sel(&c_str)
+                let btn = if app.brush.char == c {
+                    Button::selected(&c_str)
                 } else {
-                    make_button(&c_str)
-                }));
+                    Button::normal(&c_str)
+                };
 
-                app.register_click_area(&area, ClickAction::Set(SetValue::Char(c)));
+                let button = Paragraph::new(Line::from(btn));
+
+                app.input.register_click(
+                    &area,
+                    ClickAction::Set(SetValue::Char(c)),
+                    InputFocus::Normal,
+                );
                 f.render_widget(button, area);
             });
     }
@@ -386,7 +422,11 @@ impl<'a> ColorPalette<'a> {
 
                 let color_pg = Paragraph::new(vec![Line::from(top_span), Line::from(bottom_span)]);
 
-                app.register_click_area(&area, ClickAction::Set(SetValue::Color(color)));
+                app.input.register_click(
+                    &area,
+                    ClickAction::Set(SetValue::Color(color)),
+                    InputFocus::Normal,
+                );
                 f.render_widget(color_pg, area);
             });
     }
@@ -406,13 +446,13 @@ impl<'a> LayerManager<'a> {
         .split(block);
 
         Self::render_buttons(app, f, layout[0]);
-        Self::render_layers2(app, f, layout[1]);
+        Self::render_layers(app, f, layout[1]);
     }
 
     fn outer_block(app: &mut App, f: &mut Frame, area: Rect) -> Rect {
         let block = Block::new()
             .title(Title::from(" Layers ".bold()).alignment(Alignment::Center))
-            .title(Title::from(make_button("+")).alignment(Alignment::Right))
+            .title(Title::from(Button::normal("+")).alignment(Alignment::Right))
             .padding(Padding::horizontal(1))
             .borders(Borders::TOP | Borders::BOTTOM)
             .border_style(Style::new().fg(TOOL_BORDER));
@@ -423,7 +463,11 @@ impl<'a> LayerManager<'a> {
             x: area.width - 3,
             ..area
         };
-        app.register_click_area(&add_layer_button, ClickAction::Layer(Add));
+        app.input.register_click(
+            &add_layer_button,
+            ClickAction::Layer(Add),
+            InputFocus::Normal,
+        );
 
         let outer_block = block.inner(area);
         f.render_widget(block, area);
@@ -432,64 +476,21 @@ impl<'a> LayerManager<'a> {
     }
 
     fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
-        let row_width = 15; // 3 * 5
-        let full_width = area.width;
-        let centered = Layout::new(
+        let row = Layout::new(
             Direction::Horizontal,
             [
-                Constraint::Length((full_width - row_width) / 2),
-                Constraint::Max(row_width),
-                Constraint::Length((full_width - row_width) / 2),
+                Constraint::Min(8),
+                Constraint::Min(8),
+                Constraint::Min(4),
+                Constraint::Min(6),
             ],
         )
-        .split(area)[1];
-        let row = Layout::new(Direction::Horizontal, [Constraint::Min(3); 5]).split(centered);
+        .split(area);
 
         Self::delete_button(app, f, row[0]);
         Self::rename_button(app, f, row[1]);
         Self::up_button(app, f, row[2]);
         Self::down_button(app, f, row[3]);
-
-        // // Visibility
-        app.register_click_area(&row[4], ClickAction::Layer(ToggleVis));
-        let visibility_char = if app.canvas.current_layer_visibile() {
-            "H"
-        } else {
-            "S"
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(make_button(visibility_char))),
-            row[4],
-        );
-    }
-
-    fn render_layers2(app: &mut App, f: &mut Frame, area: Rect) {
-        let layers_count = app.canvas.layers.len();
-
-        let mut constraints = vec![Constraint::Max(1); layers_count];
-        constraints.push(Constraint::Min(0));
-
-        f.render_widget(Block::new().bg(BG_DARK), area);
-
-        let rows = Layout::new(Direction::Vertical, constraints).split(area);
-
-        // TODO: add buttons on the top that operate on the selected layer
-        //       vs. the layers each having buttons
-
-        for (i, layer) in app.canvas.layers.clone().into_iter().rev().enumerate() {
-            let index = layers_count - (i + 1);
-            let is_active_layer = index == app.canvas.selected;
-
-            // Selected layer background
-            if is_active_layer {
-                f.render_widget(Block::new().bg(LAYER_SELECTED), rows[i]);
-            } else {
-                app.register_click_area(&rows[i], ClickAction::Layer(Select(index as u8)));
-            }
-
-            // Layer
-            f.render_widget(Paragraph::new(layer.name), rows[i]);
-        }
     }
 
     fn render_layers(app: &mut App, f: &mut Frame, area: Rect) {
@@ -498,29 +499,20 @@ impl<'a> LayerManager<'a> {
         let mut constraints = vec![Constraint::Max(1); layers_count];
         constraints.push(Constraint::Min(0));
 
-        f.render_widget(Block::new().bg(BG_DARK), area);
+        let block = Block::new()
+            .borders(Borders::TOP)
+            .border_type(BorderType::QuadrantOutside)
+            .border_style(Style::new().fg(BG).bg(BG_2))
+            .bg(BG_DARK);
+        let block_inner = block.inner(area);
 
-        let rows = Layout::new(Direction::Vertical, constraints).split(area);
+        f.render_widget(block, area);
 
-        // TODO: add buttons on the top that operate on the selected layer
-        //       vs. the layers each having buttons
+        let rows = Layout::new(Direction::Vertical, constraints).split(block_inner);
 
-        let row = Layout::new(
-            Direction::Horizontal,
-            [
-                Constraint::Min(0), // 0: Layer name
-                Constraint::Max(3), // 1: Delete layer
-                Constraint::Max(3), // 2: Rename layer
-                Constraint::Max(3), // 3: Move layer up
-                Constraint::Max(3), // 4: Move layer down
-                Constraint::Max(3), // 5: Visibility
-                Constraint::Max(3), // 6: Show / Hide buttons
-            ],
-        );
+        f.render_widget(Block::new().bg(BG_2), rows[layers_count]);
 
-        for (i, layer) in app.canvas.layers.clone().into_iter().rev().enumerate() {
-            let layer_row = row.split(rows[i]);
-
+        for (i, (name, show)) in app.canvas.get_info().into_iter().rev().enumerate() {
             let index = layers_count - (i + 1);
             let is_active_layer = index == app.canvas.selected;
 
@@ -528,47 +520,56 @@ impl<'a> LayerManager<'a> {
             if is_active_layer {
                 f.render_widget(Block::new().bg(LAYER_SELECTED), rows[i]);
             } else {
-                app.register_click_area(&rows[i], ClickAction::Layer(Select(index as u8)));
+                app.input.register_click(
+                    &rows[i],
+                    ClickAction::Layer(Select(index as u8)),
+                    InputFocus::Normal,
+                );
             }
 
+            let row = Layout::new(
+                Direction::Horizontal,
+                [Constraint::Min(0), Constraint::Max(6)],
+            )
+            .split(rows[i]);
+
+            // Visibility
+            app.input.register_click(
+                &row[1],
+                ClickAction::Layer(ToggleVis(index as u8)),
+                InputFocus::Normal,
+            );
+            let btn = if show {
+                Button::normal("Hide")
+            } else {
+                Button::selected("Show")
+            };
+            f.render_widget(Paragraph::new(Line::from(btn)), row[1]);
+
             // Layer
-            f.render_widget(Paragraph::new(layer.name), layer_row[0]);
+            f.render_widget(Paragraph::new(name), row[0]);
         }
     }
 
-    // fn name(app: &mut App, f: &mut Frame, area: Rect) {
-    //     app.register_click_area(&layer_row[0], ClickAction::Layer(Select(index)));
-    //     f.render_widget(Paragraph::new(layer.name), layer_row[0]);
-    // }
-
     fn delete_button(app: &mut App, f: &mut Frame, area: Rect) {
-        app.register_click_area(&area, ClickAction::Layer(Remove));
-        f.render_widget(Paragraph::new(Line::from(make_button("X"))), area);
+        Self::base_button(app, f, area, Remove, "Delete")
     }
 
     fn rename_button(app: &mut App, f: &mut Frame, area: Rect) {
-        app.register_click_area(&area, ClickAction::Layer(Rename));
-        f.render_widget(Paragraph::new(Line::from(make_button("R"))), area);
+        Self::base_button(app, f, area, Rename, "Rename")
     }
 
     fn up_button(app: &mut App, f: &mut Frame, area: Rect) {
-        app.register_click_area(&area, ClickAction::Layer(MoveUp));
-        f.render_widget(Paragraph::new(Line::from(make_button("^"))), area);
+        Self::base_button(app, f, area, MoveUp, "Up")
     }
 
     fn down_button(app: &mut App, f: &mut Frame, area: Rect) {
-        app.register_click_area(&area, ClickAction::Layer(MoveDown));
-        f.render_widget(Paragraph::new(Line::from(make_button("v"))), area);
+        Self::base_button(app, f, area, MoveDown, "Down")
     }
 
-    // fn vis_button(app: &mut App, f: &mut Frame, area: Rect) {
-    //     app.register_click_area(&layer_row[5], ClickAction::Layer(ToggleLayerVis(index)));
-    //     let visibility_char = if layer.show { "H" } else { "S" };
-    //     f.render_widget(
-    //         Paragraph::new(Line::from(make_button(visibility_char))),
-    //         layer_row[5],
-    //     );
-    // }
-    //
-    // fn buttons_toggle(app: &mut App, f: &mut Frame, area: Rect) {}
+    fn base_button(app: &mut App, f: &mut Frame, area: Rect, action: LayerAction, label: &str) {
+        app.input
+            .register_click(&area, ClickAction::Layer(action), InputFocus::Normal);
+        f.render_widget(Paragraph::new(Line::from(Button::normal(label))), area);
+    }
 }
