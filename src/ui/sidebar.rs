@@ -16,9 +16,12 @@ use crate::utils::clicks::{
 use crate::utils::input::InputMode;
 use crate::utils::tools::Tool;
 use crate::{
-    BG, BG_2, BG_DARK, BLOCK, BUTTON_COLOR, BUTTON_COLOR_SEL, DARK_TEXT, LAYER_SELECTED,
-    LOWER_BLOCK, TOOL_BORDER, UPPER_BLOCK,
+    BG, BG_2, BG_DARK, BUTTON_COLOR, BUTTON_COLOR_SEL, DARK_TEXT, LAYER_SELECTED, TOOL_BORDER,
 };
+
+const BLOCK: &str = "▐█▌";
+const LOWER_BLOCK: &str = "▗▄▖";
+const UPPER_BLOCK: &str = "▝▀▘";
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let bar_block = Block::new()

@@ -43,7 +43,7 @@ impl Default for Layers {
 
 impl Layers {
     /// Before you wreck self
-    /// This checks the [current] property against the amount of [Layers]
+    /// This checks the [selected] property against the amount of [Layers]
     /// It will add a Layer if necessary
     fn check_self(&mut self) {
         let len = self.layers.len();

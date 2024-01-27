@@ -49,24 +49,22 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
             }
         }
         _ => match key_event.code {
-            KeyCode::Esc => {
-                app.input.mode = InputMode::Normal;
-            }
             KeyCode::Char('c') => {
                 if key_event.modifiers == KeyModifiers::CONTROL {
                     app.quit();
                 } else {
-                    app.input.add_char('c');
+                    app.input.text.add_char('c');
                 }
             }
-            KeyCode::Char(ch) => app.input.add_char(ch),
-            KeyCode::Backspace => app.input.backspace(),
-            KeyCode::Delete => app.input.delete(),
-            KeyCode::Left => app.input.left(),
-            KeyCode::Right => app.input.right(),
-            KeyCode::Home => app.input.home(),
-            KeyCode::End => app.input.end(),
-            KeyCode::Enter => app.rename_layer(),
+            KeyCode::Char(ch) => app.input.text.add_char(ch),
+            KeyCode::Esc => app.input.exit(),
+            KeyCode::Backspace => app.input.text.backspace(),
+            KeyCode::Delete => app.input.text.delete(),
+            KeyCode::Left => app.input.text.left(),
+            KeyCode::Right => app.input.text.right(),
+            KeyCode::Home => app.input.text.home(),
+            KeyCode::End => app.input.text.end(),
+            KeyCode::Enter => app.apply_rename(),
             _ => {}
         },
     }
@@ -78,11 +76,17 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
     let y = event.row;
 
     match app.input.mode {
-        InputMode::Rename | InputMode::Color => {
+        InputMode::Rename | InputMode::Color(_) => {
             if event.kind == Down(MouseButton::Left) {
                 if let Some(ClickAction::Typing(action)) = app.input.get(x, y) {
                     match action {
-                        TypingAction::Accept => app.rename_layer(),
+                        TypingAction::Accept => {
+                            if app.input.mode == InputMode::Rename {
+                                app.apply_rename()
+                            } else {
+                                // TODO: apply color
+                            }
+                        }
                         TypingAction::Exit => app.input.exit(),
                         TypingAction::Nothing => {}
                     }

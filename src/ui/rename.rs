@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Stylize},
+    style::{Color, Style, Stylize},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
 };
@@ -48,6 +48,7 @@ pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
             app.canvas.current_layer_name()
         ))
         .title_alignment(Alignment::Center)
+        .title_style(Style::new().reversed())
         .borders(Borders::all())
         .border_type(BorderType::Rounded);
 
@@ -77,10 +78,10 @@ fn text(app: &App, f: &mut Frame, area: Rect) {
 
     let text_block_inner = text_block.inner(text_block_area);
 
-    let display_text = Paragraph::new(app.input.string_buffer.as_str());
+    let display_text = Paragraph::new(app.input.text.buffer.as_str());
 
     let cursor_area = Rect {
-        x: text_block_inner.x + app.input.cursor_pos as u16,
+        x: text_block_inner.x + app.input.text.pos as u16,
         width: 1,
         height: 1,
         ..text_block_inner

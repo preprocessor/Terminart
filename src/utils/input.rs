@@ -10,8 +10,81 @@ pub enum InputMode {
     #[default]
     Normal,
     Rename,
-    Color,
+    Color(ColorField),
     Help,
+}
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub enum ColorField {
+    #[default]
+    Hex,
+    R,
+    G,
+    B,
+}
+
+#[derive(Default, Debug)]
+pub struct ColorPicker {
+    r: (u8, usize),
+    g: (u8, usize),
+    b: (u8, usize),
+    buffer: (String, usize),
+}
+
+#[derive(Default, Debug)]
+pub struct TextArea {
+    pub buffer: String,
+    pub pos: usize,
+}
+
+impl TextArea {
+    pub fn add_char(&mut self, ch: char) {
+        self.buffer.insert(self.pos, ch);
+        self.pos += 1;
+    }
+
+    pub fn reset(&mut self) {
+        self.buffer.clear();
+        self.pos = 0;
+    }
+
+    pub fn backspace(&mut self) {
+        self.buffer = self
+            .buffer
+            .chars()
+            .enumerate()
+            .filter(|&(i, _)| i != self.pos - 1)
+            .map(|(_, c)| c)
+            .collect();
+
+        self.left();
+    }
+
+    pub fn delete(&mut self) {
+        self.buffer = self
+            .buffer
+            .chars()
+            .enumerate()
+            .filter(|&(i, _)| i != self.pos)
+            .map(|(_, c)| c)
+            .collect();
+    }
+
+    pub fn home(&mut self) {
+        self.pos = 0;
+    }
+
+    pub fn end(&mut self) {
+        self.pos = self.buffer.len();
+    }
+
+    pub fn left(&mut self) {
+        self.pos = self.pos.saturating_sub(1);
+    }
+
+    pub fn right(&mut self) {
+        self.pos = (self.pos + 1).min(self.buffer.len());
+    }
 }
 
 #[derive(Default, Debug)]
@@ -19,8 +92,8 @@ pub struct Input {
     pub mode: InputMode,
     pub normal: ClickLayer,
     pub typing: ClickLayer,
-    pub string_buffer: String,
-    pub cursor_pos: usize,
+    pub text: TextArea,
+    pub color: ColorPicker,
 }
 
 impl Input {
@@ -64,64 +137,27 @@ impl Input {
 
     #[rustfmt::skip]    pub fn normal(&mut self) { self.mode = InputMode::Normal; }
     #[rustfmt::skip]    pub fn rename(&mut self) { self.mode = InputMode::Rename; }
-    #[rustfmt::skip]    pub fn color(&mut self) { self.mode = InputMode::Color; }
-
-    pub fn add_char(&mut self, ch: char) {
-        // if ch.is_ascii() {
-        self.string_buffer.insert(self.cursor_pos, ch);
-        self.cursor_pos += 1;
-        // }
-    }
-
-    pub fn backspace(&mut self) {
-        self.string_buffer = self
-            .string_buffer
-            .chars()
-            .enumerate()
-            .filter(|&(i, _)| i != self.cursor_pos - 1)
-            .map(|(_, c)| c)
-            .collect();
-
-        self.left();
-    }
-
-    pub fn delete(&mut self) {
-        self.string_buffer = self
-            .string_buffer
-            .chars()
-            .enumerate()
-            .filter(|&(i, _)| i != self.cursor_pos)
-            .map(|(_, c)| c)
-            .collect();
-    }
-
-    pub fn home(&mut self) {
-        self.cursor_pos = 0;
-    }
-
-    pub fn end(&mut self) {
-        self.cursor_pos = self.string_buffer.len();
-    }
-
-    pub fn left(&mut self) {
-        self.cursor_pos = self.cursor_pos.saturating_sub(1);
-    }
-
-    pub fn right(&mut self) {
-        self.cursor_pos = (self.cursor_pos + 1).min(self.string_buffer.len());
-    }
+    #[rustfmt::skip]    pub fn color(&mut self) { self.mode = InputMode::Color(ColorField::Hex); }
 
     pub fn exit(&mut self) {
-        self.string_buffer = "".into();
-        self.cursor_pos = 0;
+        self.text.reset();
+        self.typing.clear();
         self.mode = InputMode::Normal;
     }
 
-    pub fn accept(&mut self) -> Option<String> {
-        if self.string_buffer.is_empty() {
+    pub fn get_text(&self) -> Option<String> {
+        if self.text.buffer.is_empty() {
             return None;
         }
-        let out: String = self.string_buffer.chars().take(20).collect();
+        let out: String = self.text.buffer.chars().take(20).collect();
+        Some(out)
+    }
+
+    pub fn accept(&mut self) -> Option<String> {
+        if self.text.buffer.is_empty() {
+            return None;
+        }
+        let out: String = self.text.buffer.chars().take(20).collect();
         self.exit();
         Some(out)
     }

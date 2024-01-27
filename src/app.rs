@@ -107,9 +107,14 @@ impl App {
         self.undo_history.add_removed_layer(layer);
     }
 
-    pub fn rename_layer(&mut self) {
-        if let Some(new_name) = self.input.accept() {
-            self.canvas.rename_layer(new_name);
+    pub fn apply_rename(&mut self) {
+        if let Some(new_name) = self.input.get_text() {
+            let name_exists = self.canvas.layers.iter().any(|l| l.name == new_name);
+            if name_exists {
+                // TODO: Rename fails due to name conflict
+            } else {
+                self.canvas.rename_layer(new_name);
+            }
         }
     }
 

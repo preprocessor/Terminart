@@ -20,10 +20,6 @@ pub mod utils;
 
 const TOOLBOX_WIDTH: u16 = 30;
 
-const BLOCK: &str = "▐█▌";
-const LOWER_BLOCK: &str = "▗▄▖";
-const UPPER_BLOCK: &str = "▝▀▘";
-
 const BG: Color = Color::Rgb(124, 124, 124);
 const BG_2: Color = Color::Rgb(110, 110, 110);
 const BG_DARK: Color = Color::Rgb(96, 96, 96);

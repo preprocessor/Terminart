@@ -24,7 +24,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
 
     match app.input.mode {
         InputMode::Rename => rename::show(app, f, main_layout[1]),
-        InputMode::Color => todo!("Color picker popup"),
+        InputMode::Color(_color_field) => todo!("Color picker popup"),
         InputMode::Help => help::show(f),
         InputMode::Normal => {}
     };
