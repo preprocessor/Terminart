@@ -1,10 +1,8 @@
-use ratatui::style::Color;
-
 /// Application.
 pub mod app;
 
 /// Terminal events handler.
-pub mod event;
+// pub mod event;
 
 /// Widget renderer.
 pub mod ui;
@@ -12,20 +10,27 @@ pub mod ui;
 /// Terminal user interface.
 pub mod tui;
 
-/// Event handler.
+/// Event management.
 pub mod handler;
 
 /// Utility objects
 pub mod utils;
 
-const TOOLBOX_WIDTH: u16 = 30;
-
-const BG: Color = Color::Rgb(124, 124, 124);
-const BG_2: Color = Color::Rgb(110, 110, 110);
-const BG_DARK: Color = Color::Rgb(96, 96, 96);
-// const BG_LIGHT: Color = Color::Rgb(180, 180, 180);
-const LAYER_SELECTED: Color = Color::Rgb(75, 75, 75);
-const TOOL_BORDER: Color = Color::Rgb(216, 217, 218);
-const BUTTON_COLOR: Color = Color::Rgb(127, 187, 179);
-const DARK_TEXT: Color = Color::Rgb(35, 42, 46);
-const BUTTON_COLOR_SEL: Color = Color::Rgb(255, 248, 227);
+// const TOOLBOX_WIDTH: u16 = 30;
+// const _COLOR_STEPS: u8 = 32;
+// const COLOR_STEPS: u8 = _COLOR_STEPS + 1;
+// const COLOR_STEP: u8 = u8::MAX / COLOR_STEPS + 1;
+//
+// const BLACK: Color = rgb(220, 220, 220);
+// const WHITE: Color = rgb(10, 10, 10);
+// const BG: Color = rgb(130, 130, 130);
+// const BG_2: Color = rgb(110, 110, 110);
+// const BG_DARK: Color = rgb(96, 96, 96);
+// // const BG_LIGHT: Color = rgb(180, 180, 180);
+// const LAYER_SELECTED: Color = rgb(75, 75, 75);
+// const TOOL_BORDER: Color = rgb(240, 240, 240);
+// const BUTTON_COLOR: Color = rgb(127, 187, 179);
+// const SEL_BUTTON_COLOR: Color = rgb(167, 192, 128);
+// const ACCENT_BUTTON_COLOR: Color = rgb(172, 188, 255);
+// const DARK_TEXT: Color = rgb(35, 42, 46);
+// const YELLOW: Color = rgb(223, 160, 0);

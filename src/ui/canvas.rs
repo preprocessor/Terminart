@@ -6,11 +6,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::{
-    app::App,
-    utils::{clicks::ClickAction, input::InputMode},
-    DARK_TEXT,
-};
+use crate::{app::App, ui::DARK_TEXT, utils::clicks::ClickAction};
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let block = Block::new()
@@ -20,19 +16,21 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
         .title_style(Style::new().bg(Color::Green).fg(DARK_TEXT));
 
     let block_inner = block.inner(area);
-    app.input
-        .register_click(&block_inner, ClickAction::Draw, InputMode::Normal);
+    // app.input
+    //     .register_click(&block_inner, ClickAction::Draw, InputMode::Normal);
+    app.input_capture
+        .click_mode_normal(&block_inner, ClickAction::Draw);
 
     let width = block_inner.width as f64;
     let height = block_inner.height as f64;
 
-    let c = Canvas::default()
+    let render = app.canvas.render();
+
+    let canvas = Canvas::default()
         .x_bounds([0.0, width])
         .y_bounds([0.0, height])
         .paint(|c| {
-            for (x, y, cell) in app
-                .canvas
-                .render()
+            for (x, y, cell) in render
                 .iter()
                 .map(|(&(x, y), cell)| (x as f64, y as f64, cell))
             {
@@ -41,5 +39,5 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
         });
 
     f.render_widget(block, area);
-    f.render_widget(c, block_inner);
+    f.render_widget(canvas, block_inner);
 }

@@ -1,15 +1,22 @@
-use crate::utils::{brush, cell::Cell, charpicker, input, layer, palette, undo};
+use crate::utils::{
+    brush,
+    cell::Cell,
+    charpicker, input,
+    layer::{self, LayerData},
+    palette,
+    undo::{self, HistoryAction},
+};
 
 /// Application result type.
-pub type Result<T> = color_eyre::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Application.
 #[derive(Default, Debug)]
 pub struct App {
     pub running: bool,
     pub canvas: layer::Layers,
-    pub input: input::Input,
-    pub undo_history: undo::History,
+    pub input_capture: input::InputCapture,
+    pub history: undo::History,
     pub palette: palette::Palette,
     pub char_picker: charpicker::CharPicker,
     pub brush: brush::Brush,
@@ -33,97 +40,155 @@ impl App {
     }
 
     // Drawing functions {
-    pub fn resize(&mut self, _width: u16, _height: u16) {
-        self.input.clear();
-        // let new_size = (width * height) as usize;
-        // self.canvas.shrink_to(new_size);
-        // self.canvas.reserve(new_size);
-    }
+    pub fn resize(&mut self, width: u16, height: u16) {
+        self.input_capture.clear();
 
-    pub fn erase(&mut self, x: i16, y: i16) {
-        if x >= 0 && y >= 0 {
-            let (x, y) = (x as u16, y as u16);
-            let layer = self.canvas.current_layer_mut();
-            if let Some(old_cell) = layer.data.remove(&(x, y)) {
-                self.undo_history.forget_redo();
-                self.undo_history.add_undo(x, y, old_cell, &layer.name);
-            }
+        for layer in self.canvas.layers.iter_mut() {
+            layer
+                .data
+                .retain(|&(cx, cy), _cell| cx < width && cy < height);
         }
     }
 
-    pub fn draw(&mut self, x: i16, y: i16) {
-        if x >= 0 && y >= 0 {
-            let (x, y) = (x as u16, y as u16);
-            let layer = self.canvas.current_layer_mut();
-            let new_cell = self.brush.as_cell();
+    /// Removes a cell from the current layer and returns the cell value
+    pub fn erase(&mut self, x: u16, y: u16) -> Cell {
+        let layer = self.canvas.current_layer_mut();
+        let old_cell = layer.data.remove(&(x, y)).unwrap_or_default();
 
-            let old_cell = layer.data.insert((x, y), new_cell).unwrap_or(Cell::empty());
+        self.history.forget_redo();
 
-            self.undo_history.add_undo(x, y, old_cell, &layer.name);
-            self.undo_history.forget_redo();
-        }
+        old_cell
     }
 
-    pub fn draw_cell(&mut self, x: i16, y: i16, cell: Cell) {
-        if x >= 0 && y >= 0 {
-            let (x, y) = (x as u16, y as u16);
-            let layer = self.canvas.current_layer_mut();
+    pub fn draw(&mut self, x: u16, y: u16) -> Cell {
+        let layer = self.canvas.current_layer_mut();
+        let new_cell = self.brush.as_cell();
 
-            let old_cell = layer.data.insert((x, y), cell).unwrap_or(Cell::empty());
+        let old_cell = layer.data.insert((x, y), new_cell).unwrap_or_default();
 
-            self.undo_history.add_undo(x, y, old_cell, &layer.name);
-            self.undo_history.forget_redo();
-        }
+        self.history.forget_redo();
+
+        old_cell
+    }
+
+    pub fn insert_at_cell(&mut self, x: u16, y: u16, cell: Cell) -> Cell {
+        let layer = self.canvas.current_layer_mut();
+
+        let old_cell = layer.data.insert((x, y), cell).unwrap_or_default();
+
+        // self.undo_history.add_undo(x, y, old_cell, &layer.name);
+        // TODO: add undo functionality
+        self.history.forget_redo();
+
+        old_cell
     }
 
     pub fn undo(&mut self) {
-        if let Some(undo_page) = self.undo_history.undo() {
-            let layer = self.canvas.get_layer_mut(&undo_page.name);
-            for ((x, y), cell) in undo_page.data {
-                let old_cell = layer.data.insert((x, y), cell).unwrap_or(Cell::empty());
+        let Some(mut action) = self.history.past.pop() else {
+            return;
+        };
 
-                self.undo_history.add_redo(x, y, old_cell, &undo_page.name);
+        match action {
+            HistoryAction::LayerAdded(id) => {
+                self.canvas.remove_layer_by_id(id);
+                self.canvas.queue_render();
+            }
+            HistoryAction::LayerRemoved(ref layer, index) => {
+                self.canvas.insert_layer(layer.clone(), index);
+                self.canvas.queue_render();
+            }
+            HistoryAction::LayerRenamed(id, old_name) => {
+                let layer = self.canvas.get_layer_mut(id);
+                let current_name = layer.name.clone();
+
+                layer.name = old_name;
+
+                action = HistoryAction::LayerRenamed(id, current_name);
+            }
+            HistoryAction::Draw(layer_id, ref draw_data) => {
+                let mut old_data = LayerData::new();
+                for (&pos, &cell) in draw_data {
+                    let cell_op = self.canvas.get_layer_mut(layer_id).data.insert(pos, cell);
+
+                    if let Some(cell) = cell_op {
+                        old_data.insert(pos, cell);
+                    }
+                }
+                action = HistoryAction::Draw(layer_id, old_data);
+            }
+            HistoryAction::LayerUp(layer_id) => {
+                let _ = self.canvas.move_layer_down_by_id(layer_id);
+            }
+            HistoryAction::LayerDown(layer_id) => {
+                let _ = self.canvas.move_layer_up_by_id(layer_id);
             }
         }
+
+        self.history.future.push(action);
+        self.canvas.queue_render();
     }
 
     pub fn redo(&mut self) {
-        if let Some(redo_page) = self.undo_history.redo() {
-            let canvas_layer = self.canvas.get_layer_mut(&redo_page.name);
-            for ((x, y), cell) in redo_page.data {
-                let old_cell = canvas_layer
-                    .data
-                    .insert((x, y), cell)
-                    .unwrap_or(Cell::empty());
-                self.undo_history.add_undo(x, y, old_cell, &redo_page.name);
+        let Some(mut action) = self.history.future.pop() else {
+            return;
+        };
+
+        match action {
+            HistoryAction::LayerAdded(id) => {
+                self.canvas.add_layer_with_id(id);
+            }
+            HistoryAction::LayerRemoved(ref layer, _index) => {
+                self.canvas.remove_layer_by_id(layer.id);
+            }
+            HistoryAction::LayerRenamed(id, name) => {
+                let layer = self.canvas.get_layer_mut(id);
+                let current_name = layer.name.clone();
+                layer.name = name;
+
+                action = HistoryAction::LayerRenamed(id, current_name);
+            }
+            HistoryAction::Draw(layer_id, ref draw_data) => {
+                let mut old_data = LayerData::new();
+                for (&pos, &cell) in draw_data {
+                    let cell_op = self.canvas.get_layer_mut(layer_id).data.insert(pos, cell);
+
+                    if let Some(cell) = cell_op {
+                        old_data.insert(pos, cell);
+                    }
+                }
+                action = HistoryAction::Draw(layer_id, old_data);
+            }
+            HistoryAction::LayerUp(layer_id) => {
+                let _ = self.canvas.move_layer_up_by_id(layer_id);
+            }
+            HistoryAction::LayerDown(layer_id) => {
+                let _ = self.canvas.move_layer_down_by_id(layer_id);
             }
         }
+
+        self.history.past.push(action);
+        self.canvas.queue_render();
     }
 
-    pub fn remove_layer(&mut self) {
-        let layer = self.canvas.remove_layer();
-        // BUG: This is a very simple solution, that does not care about the order
-        //      the redo will always place the layer on top of the stack
-        self.undo_history.add_removed_layer(layer);
+    pub fn remove_active_layer(&mut self) {
+        let (layer, index) = self.canvas.remove_active_layer();
+        self.history.remove_layer(layer, index);
     }
 
     pub fn apply_rename(&mut self) {
-        if let Some(new_name) = self.input.get_text() {
-            let name_exists = self.canvas.layers.iter().any(|l| l.name == new_name);
-            if name_exists {
-                // TODO: Rename fails due to name conflict
-            } else {
-                self.canvas.rename_layer(new_name);
-            }
+        if let Some(new_name) = self.input_capture.text_area.get() {
+            let (id, old_name) = self.canvas.rename_layer(new_name);
+            self.history.rename_layer(id, old_name);
+            self.input_capture.exit();
         }
     }
 
     pub fn reset(&mut self) {
-        // NOTE: Possibly remove this because layers make this a trivial task
-
         while let Some(layer) = self.canvas.layers.pop() {
-            self.undo_history.add_removed_layer(layer);
+            self.history.remove_layer(layer, self.canvas.layers.len());
         }
+
+        self.canvas.queue_render();
     }
 
     // Palette functions {

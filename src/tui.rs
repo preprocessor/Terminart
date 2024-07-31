@@ -1,5 +1,5 @@
 use crate::app::{App, Result};
-use crate::event::EventHandler;
+use crate::handler::EventHandler;
 use crate::ui;
 use better_panic::Settings;
 use crossterm::event::{

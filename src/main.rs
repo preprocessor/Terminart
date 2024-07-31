@@ -1,15 +1,15 @@
+use term_art::app::{App, Result};
+use term_art::handler::{handle_key_events, handle_mouse_events};
+use term_art::handler::{Event, EventHandler};
+use term_art::tui::Tui;
+
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io;
-use term_art::app::{App, Result};
-use term_art::event::{Event, EventHandler};
-use term_art::handler::{handle_key_events, handle_mouse_events};
-use term_art::tui::Tui;
 
 fn main() -> Result<()> {
     // Create an application.
     let mut app = App::new();
-    color_eyre::install()?;
 
     // Initialize the terminal user interface.
     let backend = CrosstermBackend::new(io::stderr());
@@ -29,6 +29,7 @@ fn main() -> Result<()> {
             Event::Mouse(mouse_event) => handle_mouse_events(mouse_event, &mut app)?,
             Event::Resize(width, height) => app.resize(width, height),
             Event::Paste(s) => {
+                // Take the first char from the clipboard and use it as the brush
                 if let Some(c) = s.chars().next() {
                     app.brush.char = c;
                 }

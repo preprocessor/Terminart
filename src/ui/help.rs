@@ -4,7 +4,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
-const ENTRIES: [(&str, &str); 9] = [
+const ENTRIES: [(&str, &str); 10] = [
     ("Q, Esc", "Quit"),
     ("?", "Toggle Help"),
     ("s, S", "Brush size down/up"),
@@ -13,6 +13,7 @@ const ENTRIES: [(&str, &str); 9] = [
     ("y", "Copy canvas to clipboard"),
     ("Y", "Copy canvas as plain text"),
     ("p, P", "Input character from clipboard"),
+    ("M-Button", "Paste to canvas at mouse cursor"),
     ("R", "Reset"),
 ];
 
@@ -70,7 +71,7 @@ pub fn show(f: &mut ratatui::Frame) {
     for (i, (key, label)) in ENTRIES.into_iter().enumerate() {
         let row = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(6), Constraint::Min(1)])
+            .constraints([Constraint::Min(6), Constraint::Min(1)])
             .split(help_box_layout[i]);
 
         f.render_widget(

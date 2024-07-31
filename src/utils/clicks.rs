@@ -1,6 +1,6 @@
 use ratatui::style::Color;
 
-use super::tools::Tool;
+use super::{input::color::TextFocus, tools::Tool};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -10,7 +10,8 @@ pub enum ClickAction {
     Next(Increment),
     Set(SetValue),
     Layer(LayerAction),
-    Typing(TypingAction),
+    Rename(RenameAction),
+    PickColor(PickAction),
 }
 
 #[repr(u8)]
@@ -25,7 +26,15 @@ pub enum Increment {
 pub enum SetValue {
     Tool(Tool),
     Color(Color),
+    Reset(ResetValue),
     Char(char), // 🦎🔥
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResetValue {
+    FG,
+    BG,
 }
 
 #[repr(u8)]
@@ -42,8 +51,23 @@ pub enum LayerAction {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TypingAction {
+pub enum RenameAction {
     Accept,
     Nothing,
     Exit,
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PickAction {
+    AcceptFG,
+    AcceptBG,
+    ReplacePColor(Color, usize),
+    Plus(TextFocus),
+    Minus(TextFocus),
+    ChangeFocus(TextFocus),
+    Update(TextFocus, u8),
+    New,
+    Exit,
+    Nothing,
 }

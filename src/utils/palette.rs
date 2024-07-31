@@ -40,12 +40,20 @@ impl Palette {
         self.colors.to_vec()
     }
 
-    fn next(&self, i: usize) -> usize {
-        (i + 1) % self.colors.len()
+    fn next(&self, index: usize) -> usize {
+        (index + 1) % self.colors.len()
     }
 
-    fn prev(&self, i: usize) -> usize {
-        i.checked_sub(1).unwrap_or(self.colors.len() - 1)
+    fn prev(&self, index: usize) -> usize {
+        index.checked_sub(1).unwrap_or(self.colors.len() - 1)
+    }
+
+    pub fn replace(&mut self, index: usize, color: Color) {
+        if index > 15 {
+            return;
+        }
+
+        self.colors[index] = color;
     }
 
     pub fn fg_next(&mut self) -> Color {

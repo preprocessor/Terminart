@@ -1,24 +1,14 @@
 [package]
-name = "term-art"
+name = "term_art"
 version = "0.1.0"
-authors = ["wyspr"]
-license = "MIT"
 edition = "2021"
 
 [dependencies]
-ansi-style = "1.2.0"
+alea = "0.2.2"
+ansi-style = "1.2.1"
 better-panic = "0.3.0"
 cli-clipboard = "0.4.0"
-color-eyre = "0.6.2"
 crossterm = "0.27.0"
-hashbrown = "0.14.3"
-ratatui = "0.25.0"
-strum = { version = "0.25", features = ["derive"] }
-tui-input = "0.8.0"
-
-# [profile.release]
-# opt-level = 'z'
-# lto = true
-# codegen-units = 1
-# panic = 'abort'
-# strip = "symbols"
+hashbrown = "0.14.5"
+ratatui = "0.27.0"
+# strum = "0.26.2"

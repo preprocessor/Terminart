@@ -1,79 +1,78 @@
-use super::{cell::Cell, layer::Layer};
+use super::layer::{Layer, LayerData};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HistoryAction {
+    LayerAdded(u32),
+    LayerRemoved(Layer, usize),
+    LayerRenamed(u32, String),
+    LayerUp(u32),
+    LayerDown(u32),
+    Draw(u32, LayerData),
+}
 
 #[derive(Debug, Default)]
 pub struct History {
-    pub past: Vec<Layer>,
-    pub future: Vec<Layer>,
+    pub past: Vec<HistoryAction>,
+    pub future: Vec<HistoryAction>,
+    pub partial_draw: Option<LayerData>,
 }
 
 impl History {
-    /// Adds a new page to undo if the current page doesn't match the selected layer
-    pub fn try_add_page(&mut self, layer_name: &str) {
-        match self.past.last() {
-            None => self.past.push(Layer::new(layer_name)),
-            Some(page) if !page.data.is_empty() => self.past.push(Layer::new(layer_name)),
-            _ => {}
-        }
+    pub fn draw(&mut self, id: u32, data: LayerData) {
+        self.past.push(HistoryAction::Draw(id, data));
     }
 
-    /// Add a cell to the undo history
-    pub fn add_undo(&mut self, x: u16, y: u16, new_cell: Cell, layer_name: &str) {
-        if self.past.is_empty() || self.past.last().is_some_and(|l| l.name != layer_name) {
-            self.past.push(Layer::new(layer_name));
-        }
-
-        #[allow(clippy::unwrap_used)]
-        let undo_page = self.past.last_mut().unwrap();
-
-        let value = if undo_page.data.contains_key(&(x, y)) {
-            // This is to prevent a line that, in a single drag action,
-            // intersects itself; from overwriting the original values
-            // in the undo history event
-            Cell::empty()
-        } else {
-            new_cell
-        };
-
-        undo_page.data.insert((x, y), value);
+    pub fn add_layer(&mut self, id: u32) {
+        self.past.push(HistoryAction::LayerAdded(id));
     }
 
-    /// Add a cell to the redo history
-    pub fn add_redo(&mut self, x: u16, y: u16, new_cell: Cell, layer_name: &str) {
-        if self.future.is_empty() || self.future.last().is_some_and(|l| l.name != layer_name) {
-            self.future.push(Layer::new(layer_name));
-        }
-
-        #[allow(clippy::unwrap_used)]
-        self.future
-            .last_mut()
-            .unwrap()
-            .data
-            .insert((x, y), new_cell);
+    pub fn remove_layer(&mut self, layer: Layer, index: usize) {
+        self.past.push(HistoryAction::LayerRemoved(layer, index));
     }
 
-    /// Moves a page from undo to redo
-    /// Returns that page as an output
-    pub fn undo(&mut self) -> Option<Layer> {
-        let undo = self.past.pop()?;
-        self.future.push(undo.clone());
-
-        Some(undo)
+    pub fn rename_layer(&mut self, id: u32, old_name: String) {
+        self.past.push(HistoryAction::LayerRenamed(id, old_name));
     }
 
-    /// Moves a page from redo to undo
-    /// Returns that page as an output
-    pub fn redo(&mut self) -> Option<Layer> {
-        let redo = self.future.pop()?;
-        self.past.push(redo.clone());
+    pub fn layer_up(&mut self, id: u32) {
+        self.past.push(HistoryAction::LayerUp(id));
+    }
 
-        Some(redo)
+    pub fn layer_down(&mut self, id: u32) {
+        self.past.push(HistoryAction::LayerDown(id));
     }
 
     pub fn forget_redo(&mut self) {
         self.future.clear();
     }
 
-    pub fn add_removed_layer(&mut self, layer: Layer) {
-        self.past.push(layer);
+    pub fn add_partial_draw(&mut self, mut old_data: LayerData) {
+        if let Some(partial) = self.partial_draw.take() {
+            old_data.extend(partial);
+        }
+
+        self.partial_draw = Some(old_data);
+    }
+
+    pub fn finish_partial_draw(&mut self, layer_id: u32) {
+        let Some(partial_draw) = self.partial_draw.take() else {
+            return;
+        };
+
+        self.draw(layer_id, partial_draw);
+    }
+
+    pub fn click_to_partial_draw(&mut self) {
+        let last_action = self.past.pop();
+
+        let Some(hist_action) = last_action else {
+            return;
+        };
+
+        if let HistoryAction::Draw(_, data) = hist_action {
+            self.add_partial_draw(data);
+        } else {
+            self.past.push(hist_action);
+        }
     }
 }

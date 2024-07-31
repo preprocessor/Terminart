@@ -5,6 +5,5 @@ pub mod clicks;
 pub mod input;
 pub mod layer;
 pub mod palette;
-pub mod shapes;
 pub mod tools;
 pub mod undo;

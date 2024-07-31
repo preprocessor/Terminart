@@ -1,18 +1,12 @@
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Style, Stylize},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
-    Frame,
-};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Color, Style, Stylize};
+use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
+use ratatui::Frame;
 
-use crate::{
-    app::App,
-    utils::{
-        clicks::{ClickAction, TypingAction},
-        input::InputMode,
-    },
-    DARK_TEXT,
-};
+use crate::app::App;
+use crate::utils::clicks::RenameAction;
+
+use super::DARK_TEXT;
 
 pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
     let box_height = 7;
@@ -36,11 +30,8 @@ pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
     )
     .split(vert_center)[1];
 
-    app.input.register_click(
-        &block_area,
-        ClickAction::Typing(TypingAction::Nothing),
-        InputMode::Rename,
-    );
+    app.input_capture
+        .click_mode_rename(&block_area, RenameAction::Nothing);
 
     let block = Block::new()
         .title(format!(
@@ -78,10 +69,10 @@ fn text(app: &App, f: &mut Frame, area: Rect) {
 
     let text_block_inner = text_block.inner(text_block_area);
 
-    let display_text = Paragraph::new(app.input.text.buffer.as_str());
+    let display_text = Paragraph::new(app.input_capture.text_area.buffer.as_str());
 
     let cursor_area = Rect {
-        x: text_block_inner.x + app.input.text.pos as u16,
+        x: text_block_inner.x + app.input_capture.text_area.pos as u16,
         width: 1,
         height: 1,
         ..text_block_inner
@@ -110,17 +101,11 @@ fn buttons(app: &mut App, f: &mut Frame, area: Rect) {
         .bg(Color::Blue)
         .fg(Color::White);
 
-    app.input.register_click(
-        &exit_area,
-        ClickAction::Typing(TypingAction::Exit),
-        InputMode::Rename,
-    );
+    app.input_capture
+        .click_mode_rename(&exit_area, RenameAction::Exit);
     f.render_widget(exit_button, exit_area);
 
-    app.input.register_click(
-        &accept_area,
-        ClickAction::Typing(TypingAction::Accept),
-        InputMode::Rename,
-    );
+    app.input_capture
+        .click_mode_rename(&accept_area, RenameAction::Accept);
     f.render_widget(accept_button, accept_area);
 }

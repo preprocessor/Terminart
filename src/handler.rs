@@ -1,72 +1,198 @@
 use crate::app::{App, Result};
+use crate::ui::TOOLBOX_WIDTH;
 use crate::utils::cell::Cell;
-use crate::utils::clicks::{ClickAction, Increment, LayerAction, SetValue, TypingAction};
-use crate::utils::input::InputMode;
-use crate::utils::layer::Page;
-use crate::TOOLBOX_WIDTH;
+use crate::utils::clicks::{
+    ClickAction, Increment, LayerAction, PickAction, RenameAction, ResetValue, SetValue,
+};
+use crate::utils::input::{InputMode, MouseMode};
+use crate::utils::layer::LayerData;
+// use crate::TOOLBOX_WIDTH;
+
 use ansi_style::{BGColor, Color as AColor};
 use crossterm::event::MouseEventKind::{Down, Drag, Up};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
+use crossterm::event::{self, KeyEvent, MouseEvent};
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton};
 use ratatui::style::Color;
+
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+/// Terminal events.
+#[derive(Clone, Debug)]
+pub enum Event {
+    /// Terminal tick.
+    Tick,
+    /// Key press.
+    Key(KeyEvent),
+    /// Mouse click/scroll.
+    Mouse(MouseEvent),
+    /// Terminal resize.
+    Resize(u16, u16),
+    /// Paste signal
+    Paste(String),
+}
+
+/// Terminal event handler.
+#[allow(dead_code)]
+#[derive(Debug)]
+pub struct EventHandler {
+    /// Event sender channel.
+    sender: mpsc::Sender<Event>,
+    /// Event receiver channel.
+    receiver: mpsc::Receiver<Event>,
+    /// Event handler thread.
+    handler: thread::JoinHandle<()>,
+}
+
+impl EventHandler {
+    /// Constructs a new instance of [`EventHandler`].
+    pub fn new(tick_rate: u64) -> Self {
+        let tick_rate = Duration::from_millis(tick_rate);
+        let (sender, receiver) = mpsc::channel();
+        let handler = {
+            let sender = sender.clone();
+            thread::spawn(move || {
+                let mut last_tick = Instant::now();
+                loop {
+                    let timeout = tick_rate
+                        .checked_sub(last_tick.elapsed())
+                        .unwrap_or(tick_rate);
+
+                    #[allow(clippy::expect_used)]
+                    if event::poll(timeout).expect("failed to poll new events") {
+                        match event::read().expect("unable to read event") {
+                            event::Event::Key(e) => sender.send(Event::Key(e)),
+                            event::Event::Mouse(e) => sender.send(Event::Mouse(e)),
+                            event::Event::Resize(w, h) => sender.send(Event::Resize(w, h)),
+                            event::Event::FocusGained => Ok(()),
+                            event::Event::FocusLost => Ok(()),
+                            event::Event::Paste(s) => sender.send(Event::Paste(s)),
+                        }
+                        .expect("failed to send terminal event")
+                    }
+
+                    if last_tick.elapsed() >= tick_rate {
+                        #[allow(clippy::expect_used)]
+                        sender.send(Event::Tick).expect("failed to send tick event");
+                        last_tick = Instant::now();
+                    }
+                }
+            })
+        };
+        Self {
+            sender,
+            receiver,
+            handler,
+        }
+    }
+
+    /// Receive the next event from the handler thread.
+    ///
+    /// This function will always block the current thread if
+    /// there is no data available and it's possible for more data to be sent.
+    pub fn next(&self) -> Result<Event> {
+        Ok(self.receiver.recv()?)
+    }
+}
 
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
-    match app.input.mode {
-        InputMode::Normal | InputMode::Help => {
-            match key_event.code {
-                // Exit application on `ESC` or `Q`
-                KeyCode::Esc | KeyCode::Char('Q') => {
-                    app.quit();
-                }
-                // Exit application on `Ctrl-C`
-                KeyCode::Char('c' | 'C') => {
-                    if key_event.modifiers == KeyModifiers::CONTROL {
-                        app.quit();
-                    }
-                }
-                // Reset
-                KeyCode::Char('R') => app.reset(),
-                // Brush size
-                KeyCode::Char('s') => app.brush.up(1),
-                KeyCode::Char('S') => app.brush.down(1),
-                // Cycle foreground color through palette
-                KeyCode::Char('f') => app.brush_next_fg(),
-                KeyCode::Char('F') => app.brush_prev_fg(),
-                // Cycle background color through palette
-                KeyCode::Char('b') => app.brush_next_bg(),
-                KeyCode::Char('B') => app.brush_prev_bg(),
-                // Copy canvas contents to clipboard
-                KeyCode::Char('Y') => copy_canvas_text(app)?,
-                KeyCode::Char('y') => copy_canvas_ansi(app)?,
-                // Use clipboard to set brush char
-                KeyCode::Char('p') => clip_brush(app),
-                // Help window
-                KeyCode::Char('?') => app.input.toggle_help(),
-                // Undo / Redo
-                KeyCode::Char('u') => app.undo(),
-                KeyCode::Char('U') => app.redo(),
-                _ => {}
+    match app.input_capture.mode {
+        InputMode::Normal | InputMode::Help => normal_mode_keymaps(key_event, app)?,
+        InputMode::Rename => rename_mode_keymaps(key_event, app),
+        InputMode::Color => color_mode_keymaps(key_event, app),
+    }
+    Ok(())
+}
+
+fn color_mode_keymaps(key_event: KeyEvent, app: &mut App) {
+    match key_event.code {
+        KeyCode::Char('c') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.quit();
+            } else {
+                app.input_capture.color_picker.input('c');
             }
         }
-        _ => match key_event.code {
-            KeyCode::Char('c') => {
-                if key_event.modifiers == KeyModifiers::CONTROL {
-                    app.quit();
-                } else {
-                    app.input.text.add_char('c');
-                }
+        KeyCode::Char(ch) => app.input_capture.color_picker.input(ch),
+        KeyCode::Esc => app.input_capture.exit(),
+        KeyCode::Tab | KeyCode::Down => app.input_capture.color_picker.tab(),
+        KeyCode::BackTab | KeyCode::Up => app.input_capture.color_picker.backtab(),
+        KeyCode::Backspace => app.input_capture.color_picker.text.backspace(),
+        KeyCode::Delete => app.input_capture.color_picker.text.delete(),
+        KeyCode::Left => app.input_capture.color_picker.text.left(),
+        KeyCode::Right => app.input_capture.color_picker.text.right(),
+        KeyCode::Home => app.input_capture.color_picker.text.home(),
+        KeyCode::End => app.input_capture.color_picker.text.end(),
+        // KeyCode::Enter => app.apply_rename(),
+        _ => {}
+    }
+}
+
+fn rename_mode_keymaps(key_event: KeyEvent, app: &mut App) {
+    match key_event.code {
+        KeyCode::Char('c') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.quit();
+            } else {
+                app.input_capture.text_area.input('c');
             }
-            KeyCode::Char(ch) => app.input.text.add_char(ch),
-            KeyCode::Esc => app.input.exit(),
-            KeyCode::Backspace => app.input.text.backspace(),
-            KeyCode::Delete => app.input.text.delete(),
-            KeyCode::Left => app.input.text.left(),
-            KeyCode::Right => app.input.text.right(),
-            KeyCode::Home => app.input.text.home(),
-            KeyCode::End => app.input.text.end(),
-            KeyCode::Enter => app.apply_rename(),
-            _ => {}
-        },
+        }
+        KeyCode::Char(ch) => app.input_capture.text_area.input(ch),
+        KeyCode::Esc => app.input_capture.exit(),
+        KeyCode::Backspace => app.input_capture.text_area.backspace(),
+        KeyCode::Delete => app.input_capture.text_area.delete(),
+        KeyCode::Left => app.input_capture.text_area.left(),
+        KeyCode::Right => app.input_capture.text_area.right(),
+        KeyCode::Home => app.input_capture.text_area.home(),
+        KeyCode::End => app.input_capture.text_area.end(),
+        KeyCode::Enter => app.apply_rename(),
+        _ => {}
+    }
+}
+
+fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> Result<()> {
+    match key_event.code {
+        // Exit application on `ESC` or `Q`
+        KeyCode::Esc | KeyCode::Char('Q') => app.quit(),
+        // Exit application on `Ctrl-C`
+        KeyCode::Char('c' | 'C') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.quit();
+            }
+        }
+        KeyCode::Char('v' | 'V') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                todo!("Add paste keybind");
+                // let (old_cells, id) = paste_into_canvas(app, x - TOOLBOX_WIDTH, y)?;
+                // app.history.draw(id, old_cells);
+                // return Ok(());
+            }
+        }
+        // Reset
+        KeyCode::Char('R') => app.reset(),
+        // Brush size
+        KeyCode::Char('s') => app.brush.up(1),
+        KeyCode::Char('S') => app.brush.down(1),
+        // Cycle foreground color through palette
+        KeyCode::Char('f') => app.brush_next_fg(),
+        KeyCode::Char('F') => app.brush_prev_fg(),
+        // Cycle background color through palette
+        KeyCode::Char('b') => app.brush_next_bg(),
+        KeyCode::Char('B') => app.brush_prev_bg(),
+        // Copy canvas contents to clipboard
+        KeyCode::Char('Y') => copy_canvas_text(app)?,
+        KeyCode::Char('y') => copy_canvas_ansi(app)?,
+        // Use clipboard to set brush char
+        KeyCode::Char('p') => clip_brush(app),
+        // Help window
+        // KeyCode::Char('?') => app.input_capture.toggle_help(),
+        KeyCode::Char('?') => app.input_capture.toggle_help(),
+        // Undo / Redo
+        KeyCode::Char('u') => app.undo(),
+        KeyCode::Char('U') => app.redo(),
+        _ => {}
     }
     Ok(())
 }
@@ -75,32 +201,55 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
     let x = event.column;
     let y = event.row;
 
-    match app.input.mode {
-        InputMode::Rename | InputMode::Color(_) => {
-            if event.kind == Down(MouseButton::Left) {
-                if let Some(ClickAction::Typing(action)) = app.input.get(x, y) {
-                    match action {
-                        TypingAction::Accept => {
-                            if app.input.mode == InputMode::Rename {
-                                app.apply_rename()
-                            } else {
-                                // TODO: apply color
-                            }
-                        }
-                        TypingAction::Exit => app.input.exit(),
-                        TypingAction::Nothing => {}
-                    }
-                } else {
-                    app.input.exit();
-                    normal_mouse_mode(event, app)?;
-                }
-            }
-        }
-        InputMode::Normal | InputMode::Help => {
-            normal_mouse_mode(event, app)?;
-        }
+    match app.input_capture.mode {
+        InputMode::Color => color_mode_mouse(event, app, x, y),
+        InputMode::Rename => rename_mode_mouse(event, app, x, y)?,
+        InputMode::Normal | InputMode::Help => normal_mouse_mode(event, app)?,
     }
     Ok(())
+}
+
+fn rename_mode_mouse(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result<()> {
+    if event.kind == Down(MouseButton::Left) {
+        if let Some(ClickAction::Rename(action)) = app.input_capture.get(x, y) {
+            match action {
+                RenameAction::Accept => app.apply_rename(),
+                RenameAction::Exit => app.input_capture.exit(),
+                RenameAction::Nothing => {}
+            }
+        } else {
+            app.input_capture.exit();
+            normal_mouse_mode(event, app)?;
+        }
+    };
+    Ok(())
+}
+
+fn color_mode_mouse(event: MouseEvent, app: &mut App, x: u16, y: u16) {
+    if event.kind == Down(MouseButton::Left) || event.kind == Drag(MouseButton::Left) {
+        if let Some(&ClickAction::PickColor(action)) = app.input_capture.get(x, y) {
+            match action {
+                PickAction::AcceptFG => {
+                    app.brush.fg = app.input_capture.color_picker.get_style_color()
+                }
+                PickAction::AcceptBG => {
+                    app.brush.bg = app.input_capture.color_picker.get_style_color()
+                }
+                PickAction::ReplacePColor(c, i) => app.palette.replace(i, c),
+                PickAction::ChangeFocus(new_focus) => {
+                    app.input_capture.color_picker.set_attention(new_focus)
+                }
+                PickAction::Update(color, value) => {
+                    app.input_capture.color_picker.set(color, value)
+                }
+                PickAction::Plus(c) => app.input_capture.color_picker.plus(c),
+                PickAction::Minus(c) => app.input_capture.color_picker.minus(c),
+                PickAction::New => app.input_capture.color_picker.reset(),
+                PickAction::Exit => app.input_capture.exit(),
+                PickAction::Nothing => {}
+            }
+        }
+    }
 }
 
 fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
@@ -108,13 +257,8 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
     let y = event.row;
 
     match event.kind {
-        Up(_) => {
-            // if event.modifiers != KeyModifiers::CONTROL {
-            app.canvas.last_pos = None
-            // }
-        }
         Down(btn) => {
-            if let Some(&action) = app.input.get(x, y) {
+            if let Some(&action) = app.input_capture.get(x, y) {
                 let count = match event.modifiers {
                     KeyModifiers::CONTROL => 5,
                     KeyModifiers::ALT => 2,
@@ -123,15 +267,18 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
 
                 match action {
                     ClickAction::Draw => {
-                        app.undo_history
-                            .try_add_page(app.canvas.current_layer_name());
-
                         if btn == MouseButton::Middle {
-                            paste_into_canvas(app, x - TOOLBOX_WIDTH, y)?;
+                            let (old_cells, id) = paste_into_canvas(app, x - TOOLBOX_WIDTH, y)?;
+                            app.history.draw(id, old_cells);
                             return Ok(());
                         }
 
-                        draw(x, y, app);
+                        app.input_capture.mouse_mode = MouseMode::Click;
+
+                        let drawn_cells = draw_wrapper(x, y, app);
+                        let layer_id = app.canvas.current_layer_id();
+
+                        app.history.draw(layer_id, drawn_cells);
                     }
                     ClickAction::Next(i) => match i {
                         Increment::CharPicker => app.char_picker.next(),
@@ -143,10 +290,14 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
                     },
                     ClickAction::Set(v) => match v {
                         SetValue::Tool(t) => app.brush.tool = t,
-                        SetValue::Char(char) => app.brush.char = char,
+                        SetValue::Char(c) => app.brush.char = c,
+                        SetValue::Reset(rv) => match rv {
+                            ResetValue::FG => app.brush.fg = Color::Reset,
+                            ResetValue::BG => app.brush.bg = Color::Reset,
+                        },
                         SetValue::Color(color) => match btn {
-                            MouseButton::Left => app.brush.fg = color,
-                            MouseButton::Right => app.brush.bg = color,
+                            MouseButton::Left => app.brush.bg = color,
+                            MouseButton::Right => app.brush.fg = color,
                             MouseButton::Middle => match color {
                                 c if c == app.brush.fg => app.brush.fg = Color::Reset,
                                 c if c == app.brush.bg => app.brush.bg = Color::Reset,
@@ -155,46 +306,95 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
                         },
                     },
                     ClickAction::Layer(action) => match action {
-                        LayerAction::Add => app.canvas.add_layer(None),
+                        LayerAction::Add => {
+                            let new_layer_id = app.canvas.add_layer();
+                            app.history.add_layer(new_layer_id);
+                        }
                         LayerAction::Select(index) => app.canvas.select_layer(index),
-                        LayerAction::Remove => app.remove_layer(),
-                        LayerAction::Rename => app.input.rename(),
-                        LayerAction::MoveUp => app.canvas.move_layer_up(),
-                        LayerAction::MoveDown => app.canvas.move_layer_down(),
-                        LayerAction::ToggleVis(index) => app.canvas.toggle_show(index),
+                        LayerAction::Remove => app.remove_active_layer(),
+                        LayerAction::Rename => app.input_capture.change_mode(InputMode::Rename),
+                        LayerAction::MoveUp => {
+                            let layer_id = app.canvas.get_active_layer().id;
+                            let move_was_sucessful = app.canvas.move_layer_up_by_id(layer_id);
+                            if move_was_sucessful {
+                                app.history.layer_up(layer_id);
+                            }
+                        }
+                        LayerAction::MoveDown => {
+                            let layer_id = app.canvas.get_active_layer().id;
+                            let move_was_sucessful = app.canvas.move_layer_down_by_id(layer_id);
+                            if move_was_sucessful {
+                                app.history.layer_down(layer_id);
+                            }
+                        }
+                        LayerAction::ToggleVis(index) => app.canvas.toggle_visible(index),
                     },
-                    ClickAction::Typing(_) => {}
+                    ClickAction::PickColor(PickAction::New) => {
+                        app.input_capture.change_mode(InputMode::Color)
+                    }
+                    _ => {}
                 }
             }
         }
 
         Drag(MouseButton::Left | MouseButton::Right) => {
-            if let Some(&action) = app.input.get(x, y) {
-                // If the action isnt a draw action
+            if let Some(&action) = app.input_capture.get(x, y) {
                 if action != ClickAction::Draw {
-                    // return early because we only want draw to respond to drag events
+                    // INFO: If the action isnt a draw action
+                    // INFO: return early because we only want draw to respond to drag events
                     return Ok(());
                 }
 
-                draw(x, y, app);
+                if app.input_capture.mouse_mode == MouseMode::Click {
+                    app.history.click_to_partial_draw();
+                }
+
+                app.input_capture.mouse_mode = MouseMode::Drag;
+
+                let old_data = draw_wrapper(x, y, app);
+
+                app.history.add_partial_draw(old_data);
             }
         }
+        Up(MouseButton::Left) => {
+            if event.modifiers != KeyModifiers::CONTROL {
+                app.canvas.last_pos = None;
+            }
+
+            if app.input_capture.mouse_mode == MouseMode::Drag {
+                let layer_id = app.canvas.current_layer_id();
+                app.history.finish_partial_draw(layer_id);
+            }
+
+            app.input_capture.mouse_mode = MouseMode::Normal;
+        }
+
         _ => {}
     }
     Ok(())
 }
 
-fn draw(x: u16, y: u16, app: &mut App) {
+fn draw_wrapper(x: u16, y: u16, app: &mut App) -> LayerData {
     let x = x - TOOLBOX_WIDTH;
 
     let size = app.brush.size;
     let tool = app.brush.tool;
 
+    let mut old_cells = LayerData::new();
+
     let path = connect_points((x, y), app.canvas.last_pos);
+
     for (x, y) in path {
-        tool.draw(x, y, size, app);
+        let mut partial_draw_step = tool.draw(x, y, size, app);
+
+        partial_draw_step.extend(old_cells);
+
+        old_cells = partial_draw_step;
     }
-    app.canvas.last_pos = Some((x, y))
+
+    app.canvas.last_pos = Some((x, y));
+
+    old_cells
 }
 
 fn clip_brush(app: &mut App) {
@@ -237,7 +437,7 @@ const fn get_ansi_colors(fg: Color, bg: Color) -> (AColor, BGColor) {
     (ansi_fg, ansi_bg)
 }
 
-fn get_drawing_region(app: &App) -> Result<(u16, u16, u16, u16, Page)> {
+fn get_drawing_region(app: &mut App) -> Result<(u16, u16, u16, u16, LayerData)> {
     let (mut left, mut bottom) = (u16::MAX, u16::MAX);
     let (mut right, mut top) = (u16::MIN, u16::MIN);
     let page = app.canvas.render();
@@ -253,7 +453,7 @@ fn get_drawing_region(app: &App) -> Result<(u16, u16, u16, u16, Page)> {
     Ok((left, right, bottom, top, page))
 }
 
-fn copy_canvas_ansi(app: &App) -> Result<()> {
+fn copy_canvas_ansi(app: &mut App) -> Result<()> {
     let (left, right, bottom, top, page) = get_drawing_region(app)?;
     let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
 
@@ -287,7 +487,7 @@ fn copy_canvas_ansi(app: &App) -> Result<()> {
     Ok(())
 }
 
-fn copy_canvas_text(app: &App) -> Result<()> {
+fn copy_canvas_text(app: &mut App) -> Result<()> {
     let (left, right, bottom, top, page) = get_drawing_region(app)?;
     let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
 
@@ -312,30 +512,32 @@ fn copy_canvas_text(app: &App) -> Result<()> {
     Ok(())
 }
 
-fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> Result<()> {
-    let (x, y) = (x as i16, y as i16);
+fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> Result<(LayerData, u32)> {
     let clipboard = cli_clipboard::get_contents()?;
+    let mut old_cells = LayerData::new();
     for (dy, row) in clipboard.split('\n').enumerate() {
         for (dx, char) in row.chars().enumerate() {
-            let (dx, dy) = (dx as i16, dy as i16);
-            app.draw_cell(
-                x + dx,
-                y + dy,
+            let (fx, fy) = (x + dx as u16, y + dy as u16);
+            let old_cell = app.insert_at_cell(
+                fx,
+                fy,
                 Cell {
                     char,
                     ..Default::default()
                 },
             );
+            old_cells.insert((fx, fy), old_cell);
         }
     }
-    Ok(())
+
+    let active_id = app.canvas.layers[app.canvas.active].id;
+    Ok((old_cells, active_id))
 }
 
 fn connect_points(start: (u16, u16), end: Option<(u16, u16)>) -> Vec<(u16, u16)> {
     let end = match end {
-        None => return vec![start],
-        Some(end) if end == start => return vec![start],
-        Some(end) => end,
+        Some(end) if end != start => end,
+        _ => return vec![start],
     };
 
     let start_x = start.0 as i16;
