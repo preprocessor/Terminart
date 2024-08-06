@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -7,44 +5,28 @@ use ratatui::widgets::block::Title;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
-use super::{BG, BLACK, BUTTON_COLOR, COLOR_STEP, COLOR_STEPS, DARK_TEXT, TOOL_BORDER};
 use crate::app::App;
-use crate::utils::clicks::PickAction;
-use crate::utils::input::color::TextFocus;
+use crate::components::clicks::{ClickAction::PickColor, PickAction::*};
+use crate::components::input::color::TextFocus;
 
 use super::sidebar::Button;
+use super::{centered_box, WHITE};
+use super::{BG, BLACK, BUTTON_COLOR, COLOR_STEPS, COLOR_STEP_AMT, DARK_TEXT, TOOL_BORDER};
 
-pub fn show(app: &mut App, f: &mut Frame, area: Rect) {
-    let box_height = 16;
+pub fn show(app: &mut App, f: &mut Frame) {
+    let area = f.size();
+    let box_height = 18;
     let box_width = 66;
 
-    let vert_center = Layout::new(
-        Direction::Vertical,
-        [
-            Constraint::Length((area.height - box_height) / 2),
-            Constraint::Length(box_height),
-            Constraint::Length((area.height - box_height) / 2),
-        ],
-    )
-    .split(area)[1];
-
-    let block_area = Layout::new(
-        Direction::Horizontal,
-        [
-            Constraint::Length((area.width - box_width) / 2),
-            Constraint::Length(box_width),
-            Constraint::Length((area.width - box_width) / 2),
-        ],
-    )
-    .split(vert_center)[1];
+    let block_area = centered_box(box_width, box_height, area);
 
     app.input_capture
-        .click_mode_colorpicker(&block_area, PickAction::Nothing);
+        .click_mode_popup(&block_area, PickColor(Nothing));
 
     let block = Block::new()
         .title(" Color Picker ")
         .title_alignment(Alignment::Center)
-        .title_style(Style::new().reversed())
+        .title_style(Style::new().reversed().bold())
         .borders(Borders::all())
         .border_type(BorderType::Rounded);
 
@@ -113,7 +95,7 @@ fn rgb_boxes_and_buttons(app: &mut App, f: &mut Frame, area: Rect) {
         let text_area = text_bg.inner(text_bg_area);
 
         app.input_capture
-            .click_mode_colorpicker(&text_bg_area, PickAction::ChangeFocus(name));
+            .click_mode_popup(&text_bg_area, PickColor(ChangeFocus(name)));
         f.render_widget(text_bg, text_bg_area);
 
         let text = Paragraph::new(value.to_string());
@@ -138,11 +120,11 @@ fn rgb_boxes_and_buttons(app: &mut App, f: &mut Frame, area: Rect) {
         let plus_button = Paragraph::new(Line::from(Button::normal("+")));
 
         app.input_capture
-            .click_mode_colorpicker(&minus_area, PickAction::Minus(name));
+            .click_mode_popup(&minus_area, PickColor(Minus(name)));
         f.render_widget(minus_button, minus_area);
 
         app.input_capture
-            .click_mode_colorpicker(&plus_area, PickAction::Plus(name));
+            .click_mode_popup(&minus_area, PickColor(Plus(name)));
         f.render_widget(plus_button, plus_area);
     }
 }
@@ -155,7 +137,7 @@ fn sliders(app: &mut App, f: &mut Frame, area: Rect) {
     let base_layout = Layout::new(Direction::Vertical, [Constraint::Min(1); 3]);
     let column_layout = Layout::new(
         Direction::Horizontal,
-        [Constraint::Min(1); COLOR_STEPS as usize],
+        [Constraint::Length(1); COLOR_STEPS as usize],
     );
 
     for (&row, (color_value, color_name)) in rows.iter().zip(color_values.into_iter()) {
@@ -165,13 +147,13 @@ fn sliders(app: &mut App, f: &mut Frame, area: Rect) {
         let colors_row = column_layout.split(base[1]);
         let lower_row = column_layout.split(base[2]);
 
-        let active_column = color_value.div_ceil(COLOR_STEP) as usize;
+        let active_column = color_value.div_ceil(COLOR_STEP_AMT) as usize;
 
         f.render_widget(Paragraph::new("┬"), upper_row[active_column]);
         f.render_widget(Paragraph::new("┴"), lower_row[active_column]);
 
         for i in 0..COLOR_STEPS as usize {
-            let color_strength = COLOR_STEP.saturating_mul(i as u8);
+            let color_strength = COLOR_STEP_AMT.saturating_mul(i as u8);
 
             let row_color = match color_name {
                 TextFocus::Hex => Color::White, // This won't be used
@@ -185,9 +167,9 @@ fn sliders(app: &mut App, f: &mut Frame, area: Rect) {
                 continue;
             }
 
-            app.input_capture.click_mode_colorpicker(
+            app.input_capture.click_mode_popup(
                 &colors_row[i],
-                PickAction::Update(color_name, color_strength),
+                PickColor(Update(color_name, color_strength)),
             );
             f.render_widget(Paragraph::new(" ").bg(row_color), colors_row[i]);
         }
@@ -219,7 +201,7 @@ fn preview_block(app: &mut App, f: &mut Frame, area: Rect) {
     f.render_widget(preview, layout[1]);
 }
 
-fn control_buttons(app: &mut App, f: &mut Frame, areas: Rc<[Rect]>) {
+fn control_buttons(app: &mut App, f: &mut Frame, areas: std::rc::Rc<[Rect]>) {
     let left = areas[1];
     let center = areas[3];
     let right = areas[5];
@@ -236,7 +218,7 @@ fn hex_input_and_exit(app: &mut App, f: &mut Frame, area: Rect) {
     )
     .split(area);
 
-    let title = Paragraph::new("Hex").alignment(Alignment::Center);
+    let title = Paragraph::new("Hex").alignment(Alignment::Center).bold();
     f.render_widget(title, layout[0]);
 
     let text_bg = Block::new().bg(BG).fg(TOOL_BORDER);
@@ -244,29 +226,30 @@ fn hex_input_and_exit(app: &mut App, f: &mut Frame, area: Rect) {
     let text_layout = Layout::new(
         Direction::Horizontal,
         [
-            Constraint::Min(1), // Space
-            Constraint::Min(1), // #
-            Constraint::Min(6), // Hex
-            Constraint::Min(1), // Space
+            Constraint::Length(1), // Space
+            Constraint::Length(1), // #
+            Constraint::Length(7), // Hex
+            Constraint::Length(1), // Space
         ],
     )
     .split(layout[1]);
 
     let text_bg_area = Rect {
-        width: 7,
+        width: 8,
         ..text_layout[1]
     }; // Combine the 2 inner areas
     let text_area = text_layout[2];
 
     let text = Paragraph::new(app.input_capture.color_picker.get_hex_str());
+    // todo!("enter on hex text area does nothing");
 
     f.render_widget(Paragraph::new("▐").fg(BG), text_layout[0]);
     f.render_widget(Paragraph::new("#"), text_layout[1]);
     f.render_widget(text, text_area);
-    f.render_widget(Paragraph::new("▌").fg(BG), text_layout[3]);
+    // f.render_widget(Paragraph::new("▌").fg(BG), text_layout[3]);
 
     app.input_capture
-        .click_mode_colorpicker(&text_bg_area, PickAction::ChangeFocus(TextFocus::Hex));
+        .click_mode_popup(&text_bg_area, PickColor(ChangeFocus(TextFocus::Hex)));
     f.render_widget(text_bg, text_bg_area);
 
     let text_focus = app.input_capture.color_picker.focus;
@@ -292,7 +275,7 @@ fn hex_input_and_exit(app: &mut App, f: &mut Frame, area: Rect) {
     .alignment(Alignment::Center);
 
     app.input_capture
-        .click_mode_colorpicker(&layout[3], PickAction::Exit);
+        .click_mode_popup(&layout[3], PickColor(Exit));
 
     f.render_widget(exit_button, layout[3]);
 }
@@ -330,10 +313,10 @@ fn replace_palette_color(app: &mut App, f: &mut Frame, area: Rect) {
         .for_each(|(i, (&color, &area))| {
             let button = Paragraph::new(Line::from(Button::blank(color)));
 
-            app.input_capture.click_mode_colorpicker(
-                &area,
-                PickAction::ReplacePColor(app.input_capture.color_picker.get_style_color(), i),
-            );
+            let pick_action = ReplacePColor(app.input_capture.color_picker.get_style_color(), i);
+
+            app.input_capture
+                .click_mode_popup(&area, PickColor(pick_action));
 
             f.render_widget(button, area);
         });
@@ -356,16 +339,16 @@ fn set_brush_colors(app: &mut App, f: &mut Frame, area: Rect) {
 
     let bg_button = Paragraph::new(Line::from(vec![
         Span::raw("▐").fg(BUTTON_COLOR),
-        Span::raw("■").bg(BUTTON_COLOR).fg(BLACK),
+        Span::raw("■").bg(BUTTON_COLOR).fg(WHITE),
         Span::raw(" Set to BG").bg(BUTTON_COLOR).fg(DARK_TEXT),
         Span::raw("▌").fg(BUTTON_COLOR),
     ]))
     .alignment(Alignment::Center);
 
     app.input_capture
-        .click_mode_colorpicker(&layout[1], PickAction::AcceptFG);
+        .click_mode_popup(&layout[1], PickColor(AcceptFG));
     app.input_capture
-        .click_mode_colorpicker(&layout[3], PickAction::AcceptBG);
+        .click_mode_popup(&layout[3], PickColor(AcceptBG));
 
     f.render_widget(fg_button, layout[1]);
     f.render_widget(bg_button, layout[3]);

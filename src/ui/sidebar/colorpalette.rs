@@ -1,16 +1,15 @@
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::block::Title;
-use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph};
+use ratatui::widgets::{block::Title, Block, BorderType, Borders, Padding, Paragraph};
 use ratatui::Frame;
 
 use crate::app::App;
-use crate::ui::TOOL_BORDER;
-use crate::utils::clicks::{ClickAction, PickAction, SetValue};
-use crate::utils::input::InputMode;
+use crate::components::clicks::ClickAction::{PickColor, Set};
+use crate::components::clicks::PickAction::New;
+use crate::components::clicks::SetValue::Color;
 
-use super::Button;
+use super::{Button, BG_LAYER_MANAGER, BLACK, TOOL_BORDER, WHITE};
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let block = block(app, f, area);
@@ -32,11 +31,8 @@ fn block(app: &mut App, f: &mut Frame, area: Rect) -> Rect {
         x: area.width - 3,
         ..area
     };
-    app.input_capture.register_click(
-        &add_color_button,
-        ClickAction::PickColor(PickAction::New),
-        InputMode::Normal,
-    );
+    app.input_capture
+        .click_mode_normal(&add_color_button, PickColor(New));
 
     let block_inner = block.inner(area);
     f.render_widget(block, area);
@@ -58,11 +54,9 @@ fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
         .zip(row_iter)
         .for_each(|(&color, &area)| {
             let style = match color {
-                c if c == app.brush.bg && c == app.brush.fg => {
-                    Style::new().bg(Color::Rgb(100, 100, 100))
-                }
-                c if c == app.brush.fg => Style::new().bg(Color::Rgb(220, 220, 220)),
-                c if c == app.brush.bg => Style::new().bg(Color::Rgb(10, 10, 10)),
+                c if c == app.brush.bg && c == app.brush.fg => Style::new().bg(BG_LAYER_MANAGER),
+                c if c == app.brush.fg => Style::new().bg(WHITE),
+                c if c == app.brush.bg => Style::new().bg(BLACK),
                 _ => Style::new(),
             }
             .fg(color);
@@ -76,11 +70,8 @@ fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
 
             let color_pg = Paragraph::new(vec![top_line, bot_line]);
 
-            app.input_capture.register_click(
-                &area,
-                ClickAction::Set(SetValue::Color(color)),
-                InputMode::Normal,
-            );
+            app.input_capture
+                .click_mode_normal(&area, Set(Color(color)));
             f.render_widget(color_pg, area);
         });
 }

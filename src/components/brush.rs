@@ -1,17 +1,19 @@
 use ratatui::style::{Color, Style};
+use serde::{Deserialize, Serialize};
 
-use super::{cell::Cell, tools::Tool};
+use super::{cell::Cell, tools::Tools};
 
 const BRUSH_MIN: u16 = 1;
 const BRUSH_MAX: u16 = 21;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Brush {
-    pub size: u16,
     pub fg: Color,
     pub bg: Color,
+
+    pub size: u16,
     pub char: char,
-    pub tool: Tool,
+    pub tool: Tools,
 }
 
 impl Default for Brush {
@@ -21,7 +23,7 @@ impl Default for Brush {
             fg: Color::Black,
             bg: Color::White,
             char: '░',
-            tool: Tool::default(),
+            tool: Tools::default(),
         }
     }
 }

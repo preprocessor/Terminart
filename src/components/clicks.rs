@@ -1,6 +1,6 @@
 use ratatui::style::Color;
 
-use super::{input::color::TextFocus, tools::Tool};
+use super::{input::color::TextFocus, tools::Tools};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -10,7 +10,10 @@ pub enum ClickAction {
     Next(Increment),
     Set(SetValue),
     Layer(LayerAction),
-    Rename(RenameAction),
+    Rename(PopupBoxAction),
+    Export(PopupBoxAction),
+    Save(PopupBoxAction),
+    Exit(PopupBoxAction),
     PickColor(PickAction),
 }
 
@@ -24,7 +27,7 @@ pub enum Increment {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SetValue {
-    Tool(Tool),
+    Tool(Tools),
     Color(Color),
     Reset(ResetValue),
     Char(char), // 🦎🔥
@@ -51,10 +54,10 @@ pub enum LayerAction {
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RenameAction {
+pub enum PopupBoxAction {
     Accept,
     Nothing,
-    Exit,
+    Deny,
 }
 
 #[repr(u8)]

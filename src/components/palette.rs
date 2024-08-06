@@ -1,8 +1,10 @@
 use ratatui::style::Color;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Palette {
-    colors: Vec<Color>,
+    pub colors: Vec<Color>,
+
     fg: usize,
     bg: usize,
 }

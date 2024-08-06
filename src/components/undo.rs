@@ -1,4 +1,4 @@
-use super::layer::{Layer, LayerData};
+use super::layers::{Layer, LayerData};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HistoryAction {

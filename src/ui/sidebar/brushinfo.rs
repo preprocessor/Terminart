@@ -5,11 +5,12 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::app::App;
-use crate::ui::{BLACK, TOOL_BORDER, WHITE};
-use crate::utils::clicks::{ClickAction, Increment, ResetValue, SetValue};
-use crate::utils::input::InputMode;
+use crate::components::clicks::ClickAction::{Next, Prev, Set};
+use crate::components::clicks::Increment::BrushSize;
+use crate::components::clicks::ResetValue::{BG, FG};
+use crate::components::clicks::SetValue::Reset;
 
-use super::Button;
+use super::{Button, DARK_TEXT, LIGHT_TEXT, TOOL_BORDER};
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let block_area = block(f, area);
@@ -52,7 +53,7 @@ fn render_size_info(app: &mut App, f: &mut Frame, area: Rect) {
         Span::from("ize: "),
         Span::from(brush.size.to_string()),
     ]))
-    .fg(WHITE);
+    .fg(LIGHT_TEXT);
 
     f.render_widget(size_info, size_layout[0]);
 
@@ -72,33 +73,27 @@ fn render_size_info(app: &mut App, f: &mut Frame, area: Rect) {
     let size_down_button = Paragraph::new(Line::from(Button::normal("-")));
     let size_up_button = Paragraph::new(Line::from(Button::normal("+")));
 
-    app.input_capture.register_click(
-        &size_down_area,
-        ClickAction::Prev(Increment::BrushSize),
-        InputMode::Normal,
-    );
+    app.input_capture
+        .click_mode_normal(&size_down_area, Prev(BrushSize));
     f.render_widget(size_down_button, size_down_area);
 
-    app.input_capture.register_click(
-        &size_up_area,
-        ClickAction::Next(Increment::BrushSize),
-        InputMode::Normal,
-    );
+    app.input_capture
+        .click_mode_normal(&size_up_area, Next(BrushSize));
     f.render_widget(size_up_button, size_up_area);
 }
 
 fn render_colors(app: &mut App, f: &mut Frame, area: Rect) {
     let current_colors = Paragraph::new(vec![
         Line::from(vec![
-            Span::raw("▮").fg(BLACK),
-            Span::raw("F").fg(WHITE).underlined(),
-            Span::raw("G:").fg(WHITE),
+            Span::raw("▮").fg(DARK_TEXT),
+            Span::raw("F").fg(LIGHT_TEXT).underlined(),
+            Span::raw("G:").fg(LIGHT_TEXT),
             Span::from("██").fg(app.brush.fg),
         ]),
         Line::from(vec![
-            Span::raw("▮").fg(WHITE),
-            Span::raw("B").fg(WHITE).underlined(),
-            Span::raw("G:").fg(WHITE),
+            Span::raw("▮").fg(LIGHT_TEXT),
+            Span::raw("B").fg(LIGHT_TEXT).underlined(),
+            Span::raw("G:").fg(LIGHT_TEXT),
             Span::raw("██").fg(app.brush.bg),
         ]),
     ])
@@ -115,17 +110,11 @@ fn render_colors(app: &mut App, f: &mut Frame, area: Rect) {
         ..fg_area
     };
 
-    app.input_capture.register_click(
-        &fg_area,
-        ClickAction::Set(SetValue::Reset(ResetValue::FG)),
-        InputMode::Normal,
-    );
+    app.input_capture
+        .click_mode_normal(&fg_area, Set(Reset(FG)));
 
-    app.input_capture.register_click(
-        &bg_area,
-        ClickAction::Set(SetValue::Reset(ResetValue::BG)),
-        InputMode::Normal,
-    );
+    app.input_capture
+        .click_mode_normal(&bg_area, Set(Reset(BG)));
 
     f.render_widget(current_colors, area);
 }
@@ -133,9 +122,9 @@ fn render_colors(app: &mut App, f: &mut Frame, area: Rect) {
 fn render_char_info(app: &App, f: &mut Frame, area: Rect) {
     let brush = app.brush;
     let current_char = Paragraph::new(vec![
-        Line::from(vec![Span::from("Character: "), Span::from(brush.char())]).fg(WHITE),
+        Line::from(vec![Span::from("Character: "), Span::from(brush.char())]).fg(LIGHT_TEXT),
         Line::from(vec![
-            Span::from("Preview: ").fg(WHITE),
+            Span::from("Preview: ").fg(LIGHT_TEXT),
             Span::styled(brush.char(), brush.style()),
         ]),
     ])

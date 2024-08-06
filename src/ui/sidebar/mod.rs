@@ -1,3 +1,9 @@
+mod brushinfo;
+mod charpicker;
+mod colorpalette;
+mod layermanager;
+mod toolbox;
+
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::text::{Line, Span};
@@ -5,15 +11,11 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use ratatui::Frame;
 
 use crate::app::App;
-use crate::ui::{ACCENT_BUTTON_COLOR, BG, BUTTON_COLOR, DARK_TEXT, SEL_BUTTON_COLOR, YELLOW};
 
-use super::WHITE;
-
-mod brushinfo;
-mod charpicker;
-mod colorpalette;
-mod layermanager;
-mod toolpicker;
+use super::{
+    ACCENT_BUTTON_COLOR, BG, BG_LAYER_MANAGER, BLACK, BUTTON_COLOR, DARK_TEXT, DIM_TEXT,
+    LAYER_SELECTED, LAYER_UNSELECTED, LIGHT_TEXT, SEL_BUTTON_COLOR, TOOL_BORDER, WHITE, YELLOW,
+};
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let bar_block = Block::new()
@@ -42,7 +44,7 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     .split(bar_inner);
 
     brushinfo::render(app, f, bar_layout[0]);
-    toolpicker::render(app, f, bar_layout[1]);
+    toolbox::render(app, f, bar_layout[1]);
     charpicker::render(app, f, bar_layout[2]);
     colorpalette::render(app, f, bar_layout[3]);
     layermanager::render(app, f, bar_layout[4]);
@@ -52,7 +54,7 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
             Span::raw("Help: "),
             Span::raw("? ").bold(),
         ]))
-        .fg(WHITE)
+        .fg(LIGHT_TEXT)
         .alignment(Alignment::Right),
         bar_layout[5],
     )

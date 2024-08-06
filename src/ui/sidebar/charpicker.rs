@@ -1,21 +1,15 @@
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{block::Title, Block, BorderType, Borders, Padding, Paragraph},
-    Frame,
-};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::style::{Style, Stylize};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{block::Title, Block, BorderType, Borders, Padding, Paragraph};
+use ratatui::Frame;
 
-use crate::{
-    app::App,
-    ui::TOOL_BORDER,
-    utils::{
-        clicks::{ClickAction, Increment, SetValue},
-        input::InputMode,
-    },
-};
+use crate::app::App;
+use crate::components::clicks::ClickAction::{Next, Prev, Set};
+use crate::components::clicks::Increment::CharPicker;
+use crate::components::clicks::SetValue::Char;
 
-use super::Button;
+use super::{Button, TOOL_BORDER};
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let outer_block = outer_block(app, f, area);
@@ -42,16 +36,10 @@ fn outer_block(app: &mut App, f: &mut Frame, area: Rect) -> Rect {
         x: area.width - 3,
         ..page_prev_button
     };
-    app.input_capture.register_click(
-        &page_prev_button,
-        ClickAction::Prev(Increment::CharPicker),
-        InputMode::Normal,
-    );
-    app.input_capture.register_click(
-        &page_next_button,
-        ClickAction::Next(Increment::CharPicker),
-        InputMode::Normal,
-    );
+    app.input_capture
+        .click_mode_normal(&page_prev_button, Prev(CharPicker));
+    app.input_capture
+        .click_mode_normal(&page_next_button, Next(CharPicker));
 
     let outer_block = block.inner(area);
     f.render_widget(block, area);
@@ -120,11 +108,7 @@ fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
 
             let button = Paragraph::new(Line::from(btn));
 
-            app.input_capture.register_click(
-                &area,
-                ClickAction::Set(SetValue::Char(c)),
-                InputMode::Normal,
-            );
+            app.input_capture.click_mode_normal(&area, Set(Char(c)));
             f.render_widget(button, area);
         });
 }

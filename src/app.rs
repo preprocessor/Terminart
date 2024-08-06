@@ -1,11 +1,10 @@
-use crate::utils::{
-    brush,
-    cell::Cell,
-    charpicker, input,
-    layer::{self, LayerData},
-    palette,
-    undo::{self, HistoryAction},
-};
+use crate::components::brush;
+use crate::components::cell::Cell;
+use crate::components::charpicker;
+use crate::components::input;
+use crate::components::layers::{self, LayerData};
+use crate::components::palette;
+use crate::components::undo::{self, HistoryAction};
 
 /// Application result type.
 pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
@@ -14,7 +13,7 @@ pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Default, Debug)]
 pub struct App {
     pub running: bool,
-    pub canvas: layer::Layers,
+    pub canvas: layers::Layers,
     pub input_capture: input::InputCapture,
     pub history: undo::History,
     pub palette: palette::Palette,
@@ -39,7 +38,6 @@ impl App {
         self.running = false;
     }
 
-    // Drawing functions {
     pub fn resize(&mut self, width: u16, height: u16) {
         self.input_capture.clear();
 
@@ -91,11 +89,9 @@ impl App {
         match action {
             HistoryAction::LayerAdded(id) => {
                 self.canvas.remove_layer_by_id(id);
-                self.canvas.queue_render();
             }
             HistoryAction::LayerRemoved(ref layer, index) => {
                 self.canvas.insert_layer(layer.clone(), index);
-                self.canvas.queue_render();
             }
             HistoryAction::LayerRenamed(id, old_name) => {
                 let layer = self.canvas.get_layer_mut(id);
@@ -159,10 +155,10 @@ impl App {
                 action = HistoryAction::Draw(layer_id, old_data);
             }
             HistoryAction::LayerUp(layer_id) => {
-                let _ = self.canvas.move_layer_up_by_id(layer_id);
+                self.canvas.move_layer_up_by_id(layer_id);
             }
             HistoryAction::LayerDown(layer_id) => {
-                let _ = self.canvas.move_layer_down_by_id(layer_id);
+                self.canvas.move_layer_down_by_id(layer_id);
             }
         }
 
@@ -175,23 +171,22 @@ impl App {
         self.history.remove_layer(layer, index);
     }
 
-    pub fn apply_rename(&mut self) {
-        if let Some(new_name) = self.input_capture.text_area.get() {
-            let (id, old_name) = self.canvas.rename_layer(new_name);
-            self.history.rename_layer(id, old_name);
-            self.input_capture.exit();
-        }
+    pub fn apply_rename(&mut self) -> Option<()> {
+        let new_name = self.input_capture.text_area.get()?;
+        let (id, old_name) = self.canvas.rename_layer(new_name);
+        self.history.rename_layer(id, old_name);
+        Some(())
     }
 
     pub fn reset(&mut self) {
-        while let Some(layer) = self.canvas.layers.pop() {
-            self.history.remove_layer(layer, self.canvas.layers.len());
-        }
-
+        self.canvas = layers::Layers::default();
+        self.history = undo::History::default();
+        self.palette = palette::Palette::default();
+        self.brush = brush::Brush::default();
         self.canvas.queue_render();
     }
 
-    // Palette functions {
+    // Palette functions
     pub fn brush_next_fg(&mut self) {
         self.brush.fg = self.palette.fg_next();
     }

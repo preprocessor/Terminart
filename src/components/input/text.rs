@@ -1,7 +1,10 @@
+use crate::components::save_load::FileSaveError;
+
 #[derive(Default, Debug)]
 pub struct TextArea {
     pub buffer: String,
     pub pos: usize,
+    pub error: Option<FileSaveError>,
 }
 
 impl TextArea {
@@ -9,17 +12,15 @@ impl TextArea {
         if self.buffer.is_empty() {
             return None;
         }
-        let out: String = self.buffer.chars().take(20).collect();
-        Some(out)
+        Some(self.buffer.clone())
     }
 
-    pub fn input(&mut self, ch: char) {
+    pub fn input(&mut self, ch: char, max_len: usize) {
+        if self.pos >= max_len {
+            return;
+        }
         self.buffer.insert(self.pos, ch);
         self.pos += 1;
-    }
-
-    pub fn reset(&mut self) {
-        *self = Self::default();
     }
 
     pub fn backspace(&mut self) {
@@ -58,5 +59,11 @@ impl TextArea {
 
     pub fn right(&mut self) {
         self.pos = (self.pos + 1).min(self.buffer.len());
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer = "".into();
+        self.pos = 0;
+        self.error = None;
     }
 }

@@ -1,14 +1,19 @@
 [package]
-name = "term_art"
+name = "terminart"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 alea = "0.2.2"
-ansi-style = "1.2.1"
+anstyle = "1.0.8"
+anstyle-parse = "0.2.5"
 better-panic = "0.3.0"
+ciborium = "0.2.2"
+clap = { version = "4.5.13", features = ["cargo", "derive"] }
+clap-stdin = "0.5.1"
 cli-clipboard = "0.4.0"
-crossterm = "0.27.0"
-hashbrown = "0.14.5"
-ratatui = "0.27.0"
-# strum = "0.26.2"
+crossterm = "0.28.1"
+hashbrown = { version = "0.14.5", features = ["serde"] }
+ratatui = { version = "0.27.0", features = ["serde"] }
+regex = "1.10.6"
+serde = { version = "1.0.204", features = ["derive"] }

@@ -1,12 +1,10 @@
-use ratatui::{
-    layout::Rect,
-    style::{Color, Style},
-    text::Span,
-    widgets::{canvas::Canvas, Block, BorderType, Borders},
-    Frame,
-};
+use ratatui::layout::Rect;
+use ratatui::style::{Color, Style};
+use ratatui::text::Span;
+use ratatui::widgets::{canvas::Canvas, Block, BorderType, Borders};
+use ratatui::Frame;
 
-use crate::{app::App, ui::DARK_TEXT, utils::clicks::ClickAction};
+use crate::{app::App, components::clicks::ClickAction, ui::DARK_TEXT};
 
 pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let block = Block::new()
@@ -16,8 +14,6 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
         .title_style(Style::new().bg(Color::Green).fg(DARK_TEXT));
 
     let block_inner = block.inner(area);
-    // app.input
-    //     .register_click(&block_inner, ClickAction::Draw, InputMode::Normal);
     app.input_capture
         .click_mode_normal(&block_inner, ClickAction::Draw);
 

@@ -1,27 +1,33 @@
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
 use crate::app::App;
 
-use super::layer::LayerData;
+use super::layers::LayerData;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum Tool {
-    Eraser,
-    Square,
-    Box,
-    Disk,
-    Circle,
+pub enum Tools {
+    Eraser = 1,
+    Square = 2,
+    Box = 3,
+    Disk = 4,
+    Circle = 5,
     #[default]
-    Point,
-    Plus,
-    Vertical,
-    Horizontal,
+    Point = 6,
+    Plus = 7,
+    Vertical = 8,
+    Horizontal = 9,
 }
 
-impl Tool {
-    pub fn name(&self) -> String {
-        format!("{:?}", self)
+impl fmt::Display for Tools {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
+}
 
+impl Tools {
     pub fn all() -> Vec<Self> {
         vec![
             Self::Eraser,
@@ -53,19 +59,19 @@ impl Tool {
 
     pub fn draw(&self, x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
         match self {
-            Tool::Eraser => eraser_tool(x, y, size, app),
-            Tool::Square => square_tool(x, y, size, app),
-            Tool::Box => box_tool(x, y, size, app),
-            Tool::Disk => todo!("Disk (filled Circle)"),
-            Tool::Circle => circle_tool(x, y, size, app),
-            Tool::Point => {
+            Tools::Eraser => eraser_tool(x, y, size, app),
+            Tools::Square => square_tool(x, y, size, app),
+            Tools::Box => box_tool(x, y, size, app),
+            Tools::Disk => todo!("Disk (filled Circle)"),
+            Tools::Circle => circle_tool(x, y, size, app),
+            Tools::Point => {
                 let mut old_cell = LayerData::new();
                 old_cell.insert((x, y), app.draw(x, y));
                 old_cell
             }
-            Tool::Plus => plus(x, y, size, app),
-            Tool::Vertical => vert(x, y, size, app),
-            Tool::Horizontal => horiz(x, y, size, app),
+            Tools::Plus => plus(x, y, size, app),
+            Tools::Vertical => vert(x, y, size, app),
+            Tools::Horizontal => horiz(x, y, size, app),
         }
     }
 }

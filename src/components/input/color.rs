@@ -5,7 +5,7 @@ use std::{
 
 use ratatui::prelude::Color;
 
-use crate::ui::COLOR_STEP;
+use crate::ui::COLOR_STEP_AMT;
 
 use super::text::TextArea;
 
@@ -77,18 +77,18 @@ impl ColorPicker {
     pub fn plus(&mut self, target: TextFocus) {
         match target {
             TextFocus::Hex => {}
-            TextFocus::Red => self.r = self.r.saturating_add(COLOR_STEP),
-            TextFocus::Green => self.g = self.g.saturating_add(COLOR_STEP),
-            TextFocus::Blue => self.b = self.b.saturating_add(COLOR_STEP),
+            TextFocus::Red => self.r = self.r.saturating_add(COLOR_STEP_AMT),
+            TextFocus::Green => self.g = self.g.saturating_add(COLOR_STEP_AMT),
+            TextFocus::Blue => self.b = self.b.saturating_add(COLOR_STEP_AMT),
         };
     }
 
     pub fn minus(&mut self, target: TextFocus) {
         match target {
             TextFocus::Hex => {}
-            TextFocus::Red => self.r = self.r.saturating_sub(COLOR_STEP),
-            TextFocus::Green => self.g = self.g.saturating_sub(COLOR_STEP),
-            TextFocus::Blue => self.b = self.b.saturating_sub(COLOR_STEP),
+            TextFocus::Red => self.r = self.r.saturating_sub(COLOR_STEP_AMT),
+            TextFocus::Green => self.g = self.g.saturating_sub(COLOR_STEP_AMT),
+            TextFocus::Blue => self.b = self.b.saturating_sub(COLOR_STEP_AMT),
         };
     }
 
@@ -172,7 +172,7 @@ impl ColorPicker {
         value
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         match self.focus {
             TextFocus::Hex => self.buf_to_hex(),
             TextFocus::Red => {
@@ -200,7 +200,7 @@ impl ColorPicker {
 
         self.update();
 
-        self.text.reset();
+        self.text.clear();
 
         self.text.buffer = match attn {
             TextFocus::Hex => self.get_hex_str(),
@@ -220,13 +220,13 @@ impl ColorPicker {
                 if !c.is_ascii_hexdigit() {
                     return;
                 }
-                self.text.input(c);
+                self.text.input(c, 6);
             }
             _ => {
                 if !c.is_ascii_digit() {
                     return;
                 }
-                self.text.input(c);
+                self.text.input(c, 6);
 
                 self.update();
             }

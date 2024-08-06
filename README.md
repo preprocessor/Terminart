@@ -1,2 +1,3 @@
 # Terminart
-Draw in your terminal! 
+
+Draw in your terminal!

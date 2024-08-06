@@ -1,22 +1,18 @@
 use crate::app::{App, Result};
+use crate::components::cell::Cell;
+use crate::components::clicks::*;
+use crate::components::input::{InputMode, MouseMode};
+use crate::components::layers::LayerData;
+use crate::components::save_load::{FileSaveError, SaveData};
 use crate::ui::TOOLBOX_WIDTH;
-use crate::utils::cell::Cell;
-use crate::utils::clicks::{
-    ClickAction, Increment, LayerAction, PickAction, RenameAction, ResetValue, SetValue,
-};
-use crate::utils::input::{InputMode, MouseMode};
-use crate::utils::layer::LayerData;
-// use crate::TOOLBOX_WIDTH;
 
-use ansi_style::{BGColor, Color as AColor};
+use anstyle::{Ansi256Color, AnsiColor, RgbColor};
 use crossterm::event::MouseEventKind::{Down, Drag, Up};
-use crossterm::event::{self, KeyEvent, MouseEvent};
-use crossterm::event::{KeyCode, KeyModifiers, MouseButton};
+use crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 use ratatui::style::Color;
 
-use std::sync::mpsc;
-use std::thread;
 use std::time::{Duration, Instant};
+use std::{fs::File, io::Write, sync::mpsc, thread};
 
 /// Terminal events.
 #[derive(Clone, Debug)]
@@ -99,18 +95,182 @@ impl EventHandler {
 /// Handles the key events and updates the state of [`App`].
 pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
     match app.input_capture.mode {
-        InputMode::Normal | InputMode::Help => normal_mode_keymaps(key_event, app)?,
+        InputMode::Normal => normal_mode_keymaps(key_event, app)?,
         InputMode::Rename => rename_mode_keymaps(key_event, app),
         InputMode::Color => color_mode_keymaps(key_event, app),
+        InputMode::Export => export_mode_keymaps(key_event, app),
+        InputMode::Save => save_mode_keymaps(key_event, app),
+        InputMode::Help => match key_event.code {
+            KeyCode::Char('c') => {
+                if key_event.modifiers == KeyModifiers::CONTROL {
+                    app.input_capture.change_mode(InputMode::Exit)
+                }
+            }
+            KeyCode::Esc => app.input_capture.toggle_help(),
+            KeyCode::Char('Q') => app.input_capture.change_mode(InputMode::Exit),
+            _ => {}
+        },
+        InputMode::Exit => match key_event.code {
+            KeyCode::Char('c') => {
+                if key_event.modifiers == KeyModifiers::CONTROL {
+                    app.quit();
+                }
+            }
+            KeyCode::Char('Q' | 'y' | 'Y') => app.quit(),
+            KeyCode::Esc | KeyCode::Char('n') => app.input_capture.exit(),
+            _ => {}
+        },
+        InputMode::TooSmall => match key_event.code {
+            KeyCode::Char('c') => {
+                if key_event.modifiers == KeyModifiers::CONTROL {
+                    app.quit();
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('Q') => app.quit(),
+            _ => {}
+        },
     }
     Ok(())
+}
+
+pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
+    let (x, y) = (event.column, event.row);
+
+    match app.input_capture.mode {
+        InputMode::Color => color_mode_mouse(event, app, x, y),
+        InputMode::Normal => normal_mouse_mode(event, app, x, y)?,
+        InputMode::Rename => {
+            if event.kind == Down(MouseButton::Left) {
+                if let Some(ClickAction::Rename(action)) = app.input_capture.get(x, y) {
+                    match action {
+                        PopupBoxAction::Accept => {
+                            if app.apply_rename().is_some() {
+                                app.input_capture.exit();
+                            } else {
+                                app.input_capture.text_area.error = Some(FileSaveError::NoName);
+                            }
+                        }
+                        PopupBoxAction::Deny => app.input_capture.exit(),
+                        PopupBoxAction::Nothing => {}
+                    }
+                }
+            };
+        }
+        InputMode::Help => {
+            app.input_capture.toggle_help();
+            normal_mouse_mode(event, app, x, y)?
+        }
+        InputMode::Export => {
+            if event.kind == Down(MouseButton::Left) {
+                if let Some(ClickAction::Export(action)) = app.input_capture.get(x, y) {
+                    match action {
+                        PopupBoxAction::Accept => {
+                            if let Some(file_error) = export_file(app) {
+                                app.input_capture.text_area.error = Some(file_error);
+                                return Ok(());
+                            }
+                            app.input_capture.exit();
+                        }
+                        PopupBoxAction::Deny => app.input_capture.exit(),
+                        PopupBoxAction::Nothing => {}
+                    }
+                }
+            };
+        }
+        InputMode::Save => {
+            if event.kind == Down(MouseButton::Left) {
+                if let Some(ClickAction::Save(action)) = app.input_capture.get(x, y) {
+                    match action {
+                        PopupBoxAction::Accept => {
+                            if let Some(file_error) = save_file(app) {
+                                app.input_capture.text_area.error = Some(file_error);
+                                return Ok(());
+                            }
+                            app.input_capture.exit();
+                        }
+                        PopupBoxAction::Deny => app.input_capture.exit(),
+                        PopupBoxAction::Nothing => {}
+                    }
+                }
+            };
+        }
+        InputMode::Exit => {
+            if event.kind == Down(MouseButton::Left) {
+                if let Some(ClickAction::Exit(action)) = app.input_capture.get(x, y) {
+                    match action {
+                        PopupBoxAction::Accept => app.quit(),
+                        PopupBoxAction::Deny => app.input_capture.exit(),
+                        PopupBoxAction::Nothing => {}
+                    }
+                }
+            };
+        }
+        InputMode::TooSmall => {}
+    }
+    Ok(())
+}
+
+fn save_mode_keymaps(key_event: KeyEvent, app: &mut App) {
+    match key_event.code {
+        KeyCode::Char('c') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.input_capture.change_mode(InputMode::Exit)
+            } else {
+                app.input_capture.text_area.input('c', 20);
+            }
+        }
+        KeyCode::Char(ch) => app.input_capture.text_area.input(ch, 20),
+        KeyCode::Esc => app.input_capture.exit(),
+        KeyCode::Backspace => app.input_capture.text_area.backspace(),
+        KeyCode::Delete => app.input_capture.text_area.delete(),
+        KeyCode::Left => app.input_capture.text_area.left(),
+        KeyCode::Right => app.input_capture.text_area.right(),
+        KeyCode::Home => app.input_capture.text_area.home(),
+        KeyCode::End => app.input_capture.text_area.end(),
+        KeyCode::Enter => {
+            if let Some(file_error) = save_file(app) {
+                app.input_capture.text_area.error = Some(file_error);
+                return;
+            }
+            app.input_capture.exit();
+        }
+        _ => {}
+    }
+}
+
+fn export_mode_keymaps(key_event: KeyEvent, app: &mut App) {
+    match key_event.code {
+        KeyCode::Char('c') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.input_capture.change_mode(InputMode::Exit)
+            } else {
+                app.input_capture.text_area.input('c', 20);
+            }
+        }
+        KeyCode::Char(ch) => app.input_capture.text_area.input(ch, 20),
+        KeyCode::Esc => app.input_capture.exit(),
+        KeyCode::Backspace => app.input_capture.text_area.backspace(),
+        KeyCode::Delete => app.input_capture.text_area.delete(),
+        KeyCode::Left => app.input_capture.text_area.left(),
+        KeyCode::Right => app.input_capture.text_area.right(),
+        KeyCode::Home => app.input_capture.text_area.home(),
+        KeyCode::End => app.input_capture.text_area.end(),
+        KeyCode::Enter => {
+            if let Some(file_error) = export_file(app) {
+                app.input_capture.text_area.error = Some(file_error);
+                return;
+            }
+            app.input_capture.exit();
+        }
+        _ => {}
+    }
 }
 
 fn color_mode_keymaps(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
         KeyCode::Char('c') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
-                app.quit();
+                app.input_capture.change_mode(InputMode::Exit)
             } else {
                 app.input_capture.color_picker.input('c');
             }
@@ -125,7 +285,7 @@ fn color_mode_keymaps(key_event: KeyEvent, app: &mut App) {
         KeyCode::Right => app.input_capture.color_picker.text.right(),
         KeyCode::Home => app.input_capture.color_picker.text.home(),
         KeyCode::End => app.input_capture.color_picker.text.end(),
-        // KeyCode::Enter => app.apply_rename(),
+        KeyCode::Enter => app.input_capture.color_picker.update(),
         _ => {}
     }
 }
@@ -134,12 +294,12 @@ fn rename_mode_keymaps(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
         KeyCode::Char('c') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
-                app.quit();
+                app.input_capture.change_mode(InputMode::Exit)
             } else {
-                app.input_capture.text_area.input('c');
+                app.input_capture.text_area.input('c', 20);
             }
         }
-        KeyCode::Char(ch) => app.input_capture.text_area.input(ch),
+        KeyCode::Char(ch) => app.input_capture.text_area.input(ch, 20),
         KeyCode::Esc => app.input_capture.exit(),
         KeyCode::Backspace => app.input_capture.text_area.backspace(),
         KeyCode::Delete => app.input_capture.text_area.delete(),
@@ -147,7 +307,13 @@ fn rename_mode_keymaps(key_event: KeyEvent, app: &mut App) {
         KeyCode::Right => app.input_capture.text_area.right(),
         KeyCode::Home => app.input_capture.text_area.home(),
         KeyCode::End => app.input_capture.text_area.end(),
-        KeyCode::Enter => app.apply_rename(),
+        KeyCode::Enter => {
+            if app.apply_rename().is_some() {
+                app.input_capture.exit();
+            } else {
+                app.input_capture.text_area.error = Some(FileSaveError::NoName);
+            }
+        }
         _ => {}
     }
 }
@@ -155,26 +321,36 @@ fn rename_mode_keymaps(key_event: KeyEvent, app: &mut App) {
 fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> Result<()> {
     match key_event.code {
         // Exit application on `ESC` or `Q`
-        KeyCode::Esc | KeyCode::Char('Q') => app.quit(),
+        KeyCode::Esc | KeyCode::Char('Q') => app.input_capture.change_mode(InputMode::Exit),
         // Exit application on `Ctrl-C`
         KeyCode::Char('c' | 'C') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
-                app.quit();
-            }
-        }
-        KeyCode::Char('v' | 'V') => {
-            if key_event.modifiers == KeyModifiers::CONTROL {
-                todo!("Add paste keybind");
-                // let (old_cells, id) = paste_into_canvas(app, x - TOOLBOX_WIDTH, y)?;
-                // app.history.draw(id, old_cells);
-                // return Ok(());
+                app.input_capture.change_mode(InputMode::Exit)
             }
         }
         // Reset
         KeyCode::Char('R') => app.reset(),
-        // Brush size
-        KeyCode::Char('s') => app.brush.up(1),
-        KeyCode::Char('S') => app.brush.down(1),
+        KeyCode::Char('s') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.input_capture.change_mode(InputMode::Save);
+                if let Some(last_file_name) = app.input_capture.last_file_name.clone() {
+                    app.input_capture.text_area.pos = last_file_name.len();
+                    app.input_capture.text_area.buffer = last_file_name;
+                }
+            } else {
+                // Brush size
+                app.brush.up(1)
+            }
+        }
+        KeyCode::Char('e') => {
+            if key_event.modifiers == KeyModifiers::CONTROL {
+                app.input_capture.change_mode(InputMode::Export);
+                if let Some(last_file_name) = app.input_capture.last_file_name.clone() {
+                    app.input_capture.text_area.pos = last_file_name.len();
+                    app.input_capture.text_area.buffer = last_file_name;
+                }
+            }
+        }
         // Cycle foreground color through palette
         KeyCode::Char('f') => app.brush_next_fg(),
         KeyCode::Char('F') => app.brush_prev_fg(),
@@ -187,41 +363,12 @@ fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> Result<()> {
         // Use clipboard to set brush char
         KeyCode::Char('p') => clip_brush(app),
         // Help window
-        // KeyCode::Char('?') => app.input_capture.toggle_help(),
         KeyCode::Char('?') => app.input_capture.toggle_help(),
         // Undo / Redo
         KeyCode::Char('u') => app.undo(),
         KeyCode::Char('U') => app.redo(),
         _ => {}
     }
-    Ok(())
-}
-
-pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
-    let x = event.column;
-    let y = event.row;
-
-    match app.input_capture.mode {
-        InputMode::Color => color_mode_mouse(event, app, x, y),
-        InputMode::Rename => rename_mode_mouse(event, app, x, y)?,
-        InputMode::Normal | InputMode::Help => normal_mouse_mode(event, app)?,
-    }
-    Ok(())
-}
-
-fn rename_mode_mouse(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result<()> {
-    if event.kind == Down(MouseButton::Left) {
-        if let Some(ClickAction::Rename(action)) = app.input_capture.get(x, y) {
-            match action {
-                RenameAction::Accept => app.apply_rename(),
-                RenameAction::Exit => app.input_capture.exit(),
-                RenameAction::Nothing => {}
-            }
-        } else {
-            app.input_capture.exit();
-            normal_mouse_mode(event, app)?;
-        }
-    };
     Ok(())
 }
 
@@ -248,14 +395,13 @@ fn color_mode_mouse(event: MouseEvent, app: &mut App, x: u16, y: u16) {
                 PickAction::Exit => app.input_capture.exit(),
                 PickAction::Nothing => {}
             }
+        } else {
+            app.input_capture.exit();
         }
     }
 }
 
-fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
-    let x = event.column;
-    let y = event.row;
-
+fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result<()> {
     match event.kind {
         Down(btn) => {
             if let Some(&action) = app.input_capture.get(x, y) {
@@ -296,8 +442,8 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App) -> Result<()> {
                             ResetValue::BG => app.brush.bg = Color::Reset,
                         },
                         SetValue::Color(color) => match btn {
-                            MouseButton::Left => app.brush.bg = color,
-                            MouseButton::Right => app.brush.fg = color,
+                            MouseButton::Left => app.brush.fg = color,
+                            MouseButton::Right => app.brush.bg = color,
                             MouseButton::Middle => match color {
                                 c if c == app.brush.fg => app.brush.fg = Color::Reset,
                                 c if c == app.brush.bg => app.brush.bg = Color::Reset,
@@ -405,39 +551,31 @@ fn clip_brush(app: &mut App) {
     }
 }
 
-macro_rules! get_color {
-    ($color:expr, $color_type:ty) => {
-        match $color {
-            Color::Reset => <$color_type>::Any,
-            Color::Black => <$color_type>::Black,
-            Color::Red => <$color_type>::Red,
-            Color::Green => <$color_type>::Green,
-            Color::Yellow => <$color_type>::Yellow,
-            Color::Blue => <$color_type>::Blue,
-            Color::Magenta => <$color_type>::Magenta,
-            Color::Cyan => <$color_type>::Cyan,
-            Color::Gray => <$color_type>::White,
-            Color::DarkGray => <$color_type>::BlackBright,
-            Color::LightRed => <$color_type>::RedBright,
-            Color::LightGreen => <$color_type>::GreenBright,
-            Color::LightYellow => <$color_type>::YellowBright,
-            Color::LightBlue => <$color_type>::BlueBright,
-            Color::LightMagenta => <$color_type>::MagentaBright,
-            Color::LightCyan => <$color_type>::CyanBright,
-            Color::White => <$color_type>::WhiteBright,
-            Color::Rgb(r, g, b) => <$color_type>::RGB(r, g, b),
-            Color::Indexed(i) => <$color_type>::Ansi256(i),
-        }
-    };
+fn convert_color(c: Color) -> Option<anstyle::Color> {
+    Some(match c {
+        Color::Reset => return None,
+        Color::Black => AnsiColor::Black.into(),
+        Color::Red => AnsiColor::Red.into(),
+        Color::Green => AnsiColor::Green.into(),
+        Color::Yellow => AnsiColor::Yellow.into(),
+        Color::Blue => AnsiColor::Blue.into(),
+        Color::Magenta => AnsiColor::Magenta.into(),
+        Color::Cyan => AnsiColor::Cyan.into(),
+        Color::Gray => AnsiColor::White.into(),
+        Color::DarkGray => AnsiColor::BrightBlack.into(),
+        Color::LightRed => AnsiColor::BrightRed.into(),
+        Color::LightGreen => AnsiColor::BrightGreen.into(),
+        Color::LightYellow => AnsiColor::BrightYellow.into(),
+        Color::LightBlue => AnsiColor::BrightBlue.into(),
+        Color::LightMagenta => AnsiColor::BrightMagenta.into(),
+        Color::LightCyan => AnsiColor::BrightCyan.into(),
+        Color::White => AnsiColor::White.into(),
+        Color::Rgb(r, g, b) => RgbColor(r, g, b).into(),
+        Color::Indexed(i) => Ansi256Color(i).into(),
+    })
 }
 
-const fn get_ansi_colors(fg: Color, bg: Color) -> (AColor, BGColor) {
-    let ansi_fg = get_color!(fg, AColor);
-    let ansi_bg = get_color!(bg, BGColor);
-    (ansi_fg, ansi_bg)
-}
-
-fn get_drawing_region(app: &mut App) -> Result<(u16, u16, u16, u16, LayerData)> {
+fn get_drawing_region(app: &mut App) -> Option<(u16, u16, u16, u16, LayerData)> {
     let (mut left, mut bottom) = (u16::MAX, u16::MAX);
     let (mut right, mut top) = (u16::MIN, u16::MIN);
     let page = app.canvas.render();
@@ -448,29 +586,29 @@ fn get_drawing_region(app: &mut App) -> Result<(u16, u16, u16, u16, LayerData)> 
         top = top.max(y);
     }
     if left == u16::MAX || bottom == u16::MAX {
-        return Err("No keys".into());
+        return None;
     }
-    Ok((left, right, bottom, top, page))
+    Some((left, right, bottom, top, page))
 }
 
-fn copy_canvas_ansi(app: &mut App) -> Result<()> {
+fn get_canvas_ansi(app: &mut App) -> Option<String> {
     let (left, right, bottom, top, page) = get_drawing_region(app)?;
     let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
 
     for y in bottom..=top {
+        // todo: iter 2 at a time and avoid repeating reset codes if possible
         let mut line = String::new();
         for x in left..=right {
             if let Some(cell) = page.get(&(x, y)) {
-                let (fg, bg) = get_ansi_colors(cell.fg, cell.bg);
+                let fg_color = cell.fg;
+                let bg_color = cell.bg;
+                let char = cell.char();
+                let fg_a = convert_color(fg_color);
+                let bg_a = convert_color(bg_color);
 
-                line += &format!(
-                    "{}{}{}{}{}",
-                    fg.open(),
-                    bg.open(),
-                    cell.char,
-                    fg.close(),
-                    bg.close()
-                );
+                let style = anstyle::Style::new().fg_color(fg_a).bg_color(bg_a);
+
+                line += &format!("{style}{char}{style:#}")
             } else {
                 line += " ";
             }
@@ -478,7 +616,13 @@ fn copy_canvas_ansi(app: &mut App) -> Result<()> {
         lines_vec.push(line);
     }
 
-    let output_str = lines_vec.join("\n");
+    Some(lines_vec.join("\n"))
+}
+
+fn copy_canvas_ansi(app: &mut App) -> Result<()> {
+    let Some(output_str) = get_canvas_ansi(app) else {
+        return Ok(());
+    };
 
     if !output_str.is_empty() {
         cli_clipboard::set_contents(output_str)?;
@@ -487,7 +631,7 @@ fn copy_canvas_ansi(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-fn copy_canvas_text(app: &mut App) -> Result<()> {
+fn get_canvas_text(app: &mut App) -> Option<String> {
     let (left, right, bottom, top, page) = get_drawing_region(app)?;
     let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
 
@@ -503,7 +647,13 @@ fn copy_canvas_text(app: &mut App) -> Result<()> {
         lines_vec.push(line);
     }
 
-    let output_str = lines_vec.join("\n");
+    Some(lines_vec.join("\n"))
+}
+
+fn copy_canvas_text(app: &mut App) -> Result<()> {
+    let Some(output_str) = get_canvas_text(app) else {
+        return Ok(());
+    };
 
     if !output_str.is_empty() {
         cli_clipboard::set_contents(output_str)?;
@@ -584,4 +734,60 @@ fn connect_points(start: (u16, u16), end: Option<(u16, u16)>) -> Vec<(u16, u16)>
     }
 
     out
+}
+
+fn save_file(app: &mut App) -> Option<FileSaveError> {
+    let Some(file_name) = app.input_capture.text_area.get() else {
+        return Some(FileSaveError::NoName);
+    };
+
+    let Some(canvas_ansi) = get_canvas_ansi(app) else {
+        return Some(FileSaveError::NoCanvas);
+    };
+
+    let mut file = match if app.input_capture.text_area.error == Some(FileSaveError::NameConflict) {
+        File::create(file_name.clone()).map_err(|_| FileSaveError::CantCreate)
+    } else {
+        File::create_new(file_name.clone()).map_err(|_| FileSaveError::NameConflict)
+    } {
+        Ok(file) => file,
+        Err(e) => return Some(e),
+    };
+
+    if writeln!(file, "{}", canvas_ansi).is_ok() {
+        app.input_capture.last_file_name = Some(file_name);
+        return None;
+    };
+
+    Some(FileSaveError::Other)
+}
+
+fn export_file(app: &mut App) -> Option<FileSaveError> {
+    let Some(base_name) = app.input_capture.text_area.get() else {
+        return Some(FileSaveError::NoName);
+    };
+
+    let file_name = format!("{}.tart", base_name);
+
+    let mut file = match if app.input_capture.text_area.error == Some(FileSaveError::NameConflict) {
+        File::create(file_name).map_err(|_| FileSaveError::CantCreate)
+    } else {
+        File::create_new(file_name).map_err(|_| FileSaveError::NameConflict)
+    } {
+        Ok(file) => file,
+        Err(e) => return Some(e),
+    };
+
+    let save_data = SaveData {
+        brush: app.brush,
+        palette: app.palette.clone(),
+        layers: app.canvas.layers.clone(),
+    };
+
+    if ciborium::into_writer(&save_data, &mut file).is_ok() {
+        app.input_capture.last_file_name = Some(base_name);
+        return None;
+    };
+
+    Some(FileSaveError::Other)
 }

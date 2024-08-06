@@ -1,8 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use super::cell::Cell;
 
+/// Wrapper type for the HashMap that stores the layer
+/// Indexing begins at (1, 1), values below will be ignored
 pub type LayerData = hashbrown::HashMap<(u16, u16), Cell>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Layer {
     pub name: String,
     pub visible: bool,
@@ -32,7 +36,7 @@ pub struct Layers {
     pub layers: Vec<Layer>,
     pub last_pos: Option<(u16, u16)>,
     pub active: usize,
-    id_list: Vec<u32>,
+    pub id_list: Vec<u32>,
     rendered: Option<LayerData>,
 }
 
@@ -62,11 +66,6 @@ impl Layers {
         if self.active >= len {
             self.active = len.saturating_sub(1);
         }
-    }
-
-    pub fn current_layer_visibile(&mut self) -> bool {
-        self.check_self();
-        self.layers[self.active].visible
     }
 
     pub fn current_layer_mut(&mut self) -> &mut Layer {
@@ -103,10 +102,6 @@ impl Layers {
             self.layers.push(new_layer);
             new_layer_id
         }
-    }
-
-    pub fn get_layer(&self, layer_id: u32) -> Option<&Layer> {
-        self.layers.iter().find(|l| l.id == layer_id)
     }
 
     pub fn get_mut_layer(&mut self, layer_id: u32) -> Option<&mut Layer> {

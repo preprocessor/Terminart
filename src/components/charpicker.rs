@@ -1,14 +1,12 @@
-pub type CharMap = hashbrown::HashMap<(u16, u16), char>;
-
 #[derive(Clone, Debug)]
 pub struct CharPicker {
-    pub chars: CharMap,
+    pub chars: hashbrown::HashMap<(u16, u16), char>,
     pub page: u16,
 }
 
 impl Default for CharPicker {
     fn default() -> Self {
-        let mut map = CharMap::default();
+        let mut map = hashbrown::HashMap::default();
 
         for (y, tens) in (2..=7).enumerate() {
             let tens = tens << 4; // Shift to the right
