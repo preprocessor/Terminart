@@ -44,8 +44,9 @@ impl Default for CharPicker {
 }
 
 impl CharPicker {
-    pub const fn rows(&self) -> u16 {
-        7
+    pub const fn max_pages(&self) -> u16 {
+        let page_count = 8;
+        page_count - 1
     }
 
     fn get_page(&self, number: u16) -> Vec<char> {
@@ -75,10 +76,10 @@ impl CharPicker {
 
     pub fn next(&mut self) {
         let next = self.page + 1;
-        self.page = if next > self.rows() { 0 } else { next }
+        self.page = if next > self.max_pages() { 0 } else { next }
     }
 
     pub fn prev(&mut self) {
-        self.page = self.page.checked_sub(1).unwrap_or_else(|| self.rows());
+        self.page = self.page.checked_sub(1).unwrap_or_else(|| self.max_pages());
     }
 }

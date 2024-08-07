@@ -241,7 +241,6 @@ fn hex_input_and_exit(app: &mut App, f: &mut Frame, area: Rect) {
     let text_area = text_layout[2];
 
     let text = Paragraph::new(app.input_capture.color_picker.get_hex_str());
-    // todo!("enter on hex text area does nothing");
 
     f.render_widget(Paragraph::new("▐").fg(BG), text_layout[0]);
     f.render_widget(Paragraph::new("#"), text_layout[1]);

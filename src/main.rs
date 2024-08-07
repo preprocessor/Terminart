@@ -53,9 +53,12 @@ fn main() -> Result<()> {
                 app.palette = data.palette;
                 app.canvas.id_list = data.layers.iter().map(|l| l.id).collect();
                 app.canvas.layers = data.layers;
+                app.input_capture.last_file_name =
+                    file_str.strip_suffix(".tart").map(|s| s.to_string());
             } else {
                 app.canvas.layers[0].data = AnsiData::open_file(file);
                 app.canvas.layers[0].name = "Imported Layer".into();
+                app.input_capture.last_file_name = Some(file_str.into());
             }
         } else {
             let Ok(ansi) = input.contents() else {

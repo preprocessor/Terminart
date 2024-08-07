@@ -74,16 +74,6 @@ impl Layers {
         &mut self.layers[self.active]
     }
 
-    pub fn current_layer_name(&mut self) -> &str {
-        self.check_self();
-        &self.layers[self.active].name
-    }
-
-    pub fn current_layer_id(&mut self) -> u32 {
-        self.check_self();
-        self.layers[self.active].id
-    }
-
     pub fn toggle_visible(&mut self, index: u8) {
         self.queue_render();
         if let Some(layer) = self.layers.get_mut(index as usize) {
@@ -104,11 +94,8 @@ impl Layers {
         }
     }
 
-    pub fn get_mut_layer(&mut self, layer_id: u32) -> Option<&mut Layer> {
-        self.layers.iter_mut().find(|l| l.id == layer_id)
-    }
-
-    pub fn get_active_layer(&self) -> &Layer {
+    pub fn get_active_layer(&mut self) -> &Layer {
+        self.check_self();
         &self.layers[self.active]
     }
 
@@ -136,7 +123,7 @@ impl Layers {
         }
     }
 
-    pub fn select_layer(&mut self, index: u8) {
+    pub fn set_active_layer(&mut self, index: u8) {
         self.active = index as usize;
     }
 
@@ -151,7 +138,7 @@ impl Layers {
     }
 
     /// Returns the lauer identifier and the old name
-    pub fn rename_layer(&mut self, new_name: String) -> (u32, String) {
+    pub fn rename_active_layer(&mut self, new_name: String) -> (u32, String) {
         self.check_self();
         let layer = &mut self.layers[self.active];
         let old_name = layer.name.clone();

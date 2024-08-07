@@ -352,11 +352,11 @@ fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> Result<()> {
             }
         }
         // Cycle foreground color through palette
-        KeyCode::Char('f') => app.brush_next_fg(),
-        KeyCode::Char('F') => app.brush_prev_fg(),
+        KeyCode::Char('f') => app.brush.fg = app.palette.fg_next(),
+        KeyCode::Char('F') => app.brush.fg = app.palette.fg_prev(),
         // Cycle background color through palette
-        KeyCode::Char('b') => app.brush_next_bg(),
-        KeyCode::Char('B') => app.brush_prev_bg(),
+        KeyCode::Char('b') => app.brush.bg = app.palette.bg_next(),
+        KeyCode::Char('B') => app.brush.bg = app.palette.bg_prev(),
         // Copy canvas contents to clipboard
         KeyCode::Char('Y') => copy_canvas_text(app)?,
         KeyCode::Char('y') => copy_canvas_ansi(app)?,
@@ -422,7 +422,7 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
                         app.input_capture.mouse_mode = MouseMode::Click;
 
                         let drawn_cells = draw_wrapper(x, y, app);
-                        let layer_id = app.canvas.current_layer_id();
+                        let layer_id = app.canvas.get_active_layer().id;
 
                         app.history.draw(layer_id, drawn_cells);
                     }
@@ -456,7 +456,7 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
                             let new_layer_id = app.canvas.add_layer();
                             app.history.add_layer(new_layer_id);
                         }
-                        LayerAction::Select(index) => app.canvas.select_layer(index),
+                        LayerAction::Select(index) => app.canvas.set_active_layer(index),
                         LayerAction::Remove => app.remove_active_layer(),
                         LayerAction::Rename => app.input_capture.change_mode(InputMode::Rename),
                         LayerAction::MoveUp => {
@@ -508,7 +508,7 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
             }
 
             if app.input_capture.mouse_mode == MouseMode::Drag {
-                let layer_id = app.canvas.current_layer_id();
+                let layer_id = app.canvas.get_active_layer().id;
                 app.history.finish_partial_draw(layer_id);
             }
 
@@ -596,21 +596,40 @@ fn get_canvas_ansi(app: &mut App) -> Option<String> {
     let mut lines_vec = Vec::with_capacity((top - bottom) as usize);
 
     for y in bottom..=top {
-        // todo: iter 2 at a time and avoid repeating reset codes if possible
         let mut line = String::new();
+        let mut current_fg = None;
+        let mut current_bg = None;
+
         for x in left..=right {
-            if let Some(cell) = page.get(&(x, y)) {
-                let fg_color = cell.fg;
-                let bg_color = cell.bg;
-                let char = cell.char();
-                let fg_a = convert_color(fg_color);
-                let bg_a = convert_color(bg_color);
+            if let Some(target_cell) = page.get(&(x, y)) {
+                let fg_color = target_cell.fg;
+                let bg_color = target_cell.bg;
+                let char = target_cell.char();
 
-                let style = anstyle::Style::new().fg_color(fg_a).bg_color(bg_a);
+                let mut style = anstyle::Style::new();
 
-                line += &format!("{style}{char}{style:#}")
+                if Some(fg_color) != current_fg {
+                    style = style.fg_color(convert_color(fg_color));
+                    current_fg = Some(fg_color);
+                }
+
+                if Some(bg_color) != current_bg {
+                    style = style.bg_color(convert_color(bg_color));
+                    current_bg = Some(bg_color);
+                }
+
+                line.push_str(&format!("{style}{char}"));
+
+                if page.get(&(x + 1, y)).map(|c| (c.fg, c.bg)) != Some((fg_color, bg_color)) {
+                    style = anstyle::Style::new()
+                        .bg_color(convert_color(bg_color))
+                        .fg_color(convert_color(fg_color));
+                    line.push_str(&format!("{style:#}"));
+                }
             } else {
-                line += " ";
+                line.push(' ');
+                current_fg = None;
+                current_bg = None;
             }
         }
         lines_vec.push(line);

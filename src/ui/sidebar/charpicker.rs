@@ -52,7 +52,7 @@ fn inner_block(app: &App, f: &mut Frame, area: Rect) -> Rect {
         .title(Title::from(vec![
             Span::from((app.char_picker.page + 1).to_string()),
             Span::from("/"),
-            Span::from((app.char_picker.rows() + 1).to_string()),
+            Span::from((app.char_picker.max_pages() + 1).to_string()),
         ]))
         .borders(Borders::all())
         .border_type(BorderType::Double)

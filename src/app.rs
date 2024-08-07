@@ -1,10 +1,10 @@
-use crate::components::brush;
+use crate::components::brush::Brush;
 use crate::components::cell::Cell;
-use crate::components::charpicker;
-use crate::components::input;
-use crate::components::layers::{self, LayerData};
-use crate::components::palette;
-use crate::components::undo::{self, HistoryAction};
+use crate::components::charpicker::CharPicker;
+use crate::components::input::InputCapture;
+use crate::components::layers::{LayerData, Layers};
+use crate::components::palette::Palette;
+use crate::components::undo::{History, HistoryAction};
 
 /// Application result type.
 pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
@@ -13,12 +13,12 @@ pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Default, Debug)]
 pub struct App {
     pub running: bool,
-    pub canvas: layers::Layers,
-    pub input_capture: input::InputCapture,
-    pub history: undo::History,
-    pub palette: palette::Palette,
-    pub char_picker: charpicker::CharPicker,
-    pub brush: brush::Brush,
+    pub canvas: Layers,
+    pub input_capture: InputCapture,
+    pub history: History,
+    pub palette: Palette,
+    pub char_picker: CharPicker,
+    pub brush: Brush,
 }
 
 impl App {
@@ -74,8 +74,6 @@ impl App {
 
         let old_cell = layer.data.insert((x, y), cell).unwrap_or_default();
 
-        // self.undo_history.add_undo(x, y, old_cell, &layer.name);
-        // TODO: add undo functionality
         self.history.forget_redo();
 
         old_cell
@@ -130,9 +128,7 @@ impl App {
         };
 
         match action {
-            HistoryAction::LayerAdded(id) => {
-                self.canvas.add_layer_with_id(id);
-            }
+            HistoryAction::LayerAdded(id) => self.canvas.add_layer_with_id(id),
             HistoryAction::LayerRemoved(ref layer, _index) => {
                 self.canvas.remove_layer_by_id(layer.id);
             }
@@ -173,33 +169,16 @@ impl App {
 
     pub fn apply_rename(&mut self) -> Option<()> {
         let new_name = self.input_capture.text_area.get()?;
-        let (id, old_name) = self.canvas.rename_layer(new_name);
+        let (id, old_name) = self.canvas.rename_active_layer(new_name);
         self.history.rename_layer(id, old_name);
         Some(())
     }
 
     pub fn reset(&mut self) {
-        self.canvas = layers::Layers::default();
-        self.history = undo::History::default();
-        self.palette = palette::Palette::default();
-        self.brush = brush::Brush::default();
+        self.canvas = Layers::default();
+        self.history = History::default();
+        self.palette = Palette::default();
+        self.brush = Brush::default();
         self.canvas.queue_render();
-    }
-
-    // Palette functions
-    pub fn brush_next_fg(&mut self) {
-        self.brush.fg = self.palette.fg_next();
-    }
-
-    pub fn brush_prev_fg(&mut self) {
-        self.brush.fg = self.palette.fg_prev();
-    }
-
-    pub fn brush_next_bg(&mut self) {
-        self.brush.bg = self.palette.bg_next();
-    }
-
-    pub fn brush_prev_bg(&mut self) {
-        self.brush.bg = self.palette.bg_prev();
     }
 }

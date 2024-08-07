@@ -15,6 +15,7 @@ M-Button - (Palette) Unset selected color (transparent)
     s, S - Brush size
     f, F - Cycle brush fg
     b, B - Cycle brush bg
+    u, U - Undo / Redo
        y - Copy canvas to clipboard with ANSI codes
        Y - Copy canvas to clipboard as plain text
     p, P - Input first character from clipboard as brush
