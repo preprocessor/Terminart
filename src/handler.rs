@@ -165,10 +165,11 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                 if let Some(ClickAction::Export(action)) = app.input_capture.get(x, y) {
                     match action {
                         PopupBoxAction::Accept => {
-                            if let Some(file_error) = export_file(app) {
+                            if let Err(file_error) = export_file(app) {
                                 app.input_capture.text_area.error = Some(file_error);
                                 return Ok(());
                             }
+                            app.input_capture.text_area.error = None;
                             app.input_capture.exit();
                         }
                         PopupBoxAction::Deny => app.input_capture.exit(),
@@ -182,10 +183,11 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
                 if let Some(ClickAction::Save(action)) = app.input_capture.get(x, y) {
                     match action {
                         PopupBoxAction::Accept => {
-                            if let Some(file_error) = save_file(app) {
+                            if let Err(file_error) = save_file(app) {
                                 app.input_capture.text_area.error = Some(file_error);
                                 return Ok(());
                             }
+                            app.input_capture.text_area.error = None;
                             app.input_capture.exit();
                         }
                         PopupBoxAction::Deny => app.input_capture.exit(),
@@ -228,10 +230,11 @@ fn save_mode_keymaps(key_event: KeyEvent, app: &mut App) {
         KeyCode::Home => app.input_capture.text_area.home(),
         KeyCode::End => app.input_capture.text_area.end(),
         KeyCode::Enter => {
-            if let Some(file_error) = save_file(app) {
+            if let Err(file_error) = save_file(app) {
                 app.input_capture.text_area.error = Some(file_error);
                 return;
             }
+            app.input_capture.text_area.error = None;
             app.input_capture.exit();
         }
         _ => {}
@@ -256,10 +259,11 @@ fn export_mode_keymaps(key_event: KeyEvent, app: &mut App) {
         KeyCode::Home => app.input_capture.text_area.home(),
         KeyCode::End => app.input_capture.text_area.end(),
         KeyCode::Enter => {
-            if let Some(file_error) = export_file(app) {
+            if let Err(file_error) = export_file(app) {
                 app.input_capture.text_area.error = Some(file_error);
                 return;
             }
+            app.input_capture.text_area.error = None;
             app.input_capture.exit();
         }
         _ => {}
@@ -502,7 +506,7 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
                 app.history.add_partial_draw(old_data);
             }
         }
-        Up(MouseButton::Left) => {
+        Up(MouseButton::Left | MouseButton::Right) => {
             if event.modifiers != KeyModifiers::CONTROL {
                 app.canvas.last_pos = None;
             }
@@ -704,9 +708,8 @@ fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> Result<(LayerData, u32)> 
 }
 
 fn connect_points(start: (u16, u16), end: Option<(u16, u16)>) -> Vec<(u16, u16)> {
-    let end = match end {
-        Some(end) if end != start => end,
-        _ => return vec![start],
+    let Some(end) = end else {
+        return vec![start];
     };
 
     let start_x = start.0 as i16;
@@ -755,47 +758,42 @@ fn connect_points(start: (u16, u16), end: Option<(u16, u16)>) -> Vec<(u16, u16)>
     out
 }
 
-fn save_file(app: &mut App) -> Option<FileSaveError> {
-    let Some(file_name) = app.input_capture.text_area.get() else {
-        return Some(FileSaveError::NoName);
-    };
+fn save_file(app: &mut App) -> core::result::Result<(), FileSaveError> {
+    let file_name = app
+        .input_capture
+        .text_area
+        .get()
+        .ok_or(FileSaveError::NoName)?;
 
-    let Some(canvas_ansi) = get_canvas_ansi(app) else {
-        return Some(FileSaveError::NoCanvas);
-    };
+    let canvas_ansi = get_canvas_ansi(app).ok_or(FileSaveError::NoCanvas)?;
 
-    let mut file = match if app.input_capture.text_area.error == Some(FileSaveError::NameConflict) {
-        File::create(file_name.clone()).map_err(|_| FileSaveError::CantCreate)
+    let mut file = if app.input_capture.text_area.error == Some(FileSaveError::NameConflict) {
+        File::create(&file_name).map_err(|_| FileSaveError::CantCreate)
     } else {
-        File::create_new(file_name.clone()).map_err(|_| FileSaveError::NameConflict)
-    } {
-        Ok(file) => file,
-        Err(e) => return Some(e),
-    };
+        File::create_new(&file_name).map_err(|_| FileSaveError::NameConflict)
+    }?;
 
-    if writeln!(file, "{}", canvas_ansi).is_ok() {
-        app.input_capture.last_file_name = Some(file_name);
-        return None;
-    };
+    writeln!(file, "{}", canvas_ansi).map_err(|_| FileSaveError::Other)?;
 
-    Some(FileSaveError::Other)
+    app.input_capture.last_file_name = Some(file_name);
+
+    Ok(())
 }
 
-fn export_file(app: &mut App) -> Option<FileSaveError> {
-    let Some(base_name) = app.input_capture.text_area.get() else {
-        return Some(FileSaveError::NoName);
-    };
+fn export_file(app: &mut App) -> core::result::Result<(), FileSaveError> {
+    let base_name = app
+        .input_capture
+        .text_area
+        .get()
+        .ok_or(FileSaveError::NoName)?;
 
     let file_name = format!("{}.tart", base_name);
 
-    let mut file = match if app.input_capture.text_area.error == Some(FileSaveError::NameConflict) {
-        File::create(file_name).map_err(|_| FileSaveError::CantCreate)
+    let mut file = if app.input_capture.text_area.error == Some(FileSaveError::NameConflict) {
+        File::create(&file_name).map_err(|_| FileSaveError::CantCreate)
     } else {
-        File::create_new(file_name).map_err(|_| FileSaveError::NameConflict)
-    } {
-        Ok(file) => file,
-        Err(e) => return Some(e),
-    };
+        File::create_new(&file_name).map_err(|_| FileSaveError::NameConflict)
+    }?;
 
     let save_data = SaveData {
         brush: app.brush,
@@ -803,10 +801,9 @@ fn export_file(app: &mut App) -> Option<FileSaveError> {
         layers: app.canvas.layers.clone(),
     };
 
-    if ciborium::into_writer(&save_data, &mut file).is_ok() {
-        app.input_capture.last_file_name = Some(base_name);
-        return None;
-    };
+    ciborium::into_writer(&save_data, &mut file).map_err(|_| FileSaveError::Other)?;
 
-    Some(FileSaveError::Other)
+    app.input_capture.last_file_name = Some(base_name);
+
+    Ok(())
 }

@@ -13,6 +13,7 @@ use ratatui::Terminal;
 
 use std::fs::File;
 use std::io;
+use std::path::Path;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -58,7 +59,9 @@ fn main() -> Result<()> {
             } else {
                 app.canvas.layers[0].data = AnsiData::open_file(file);
                 app.canvas.layers[0].name = "Imported Layer".into();
-                app.input_capture.last_file_name = Some(file_str.into());
+                app.input_capture.last_file_name = Path::new(file_str)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into());
             }
         } else {
             let Ok(ansi) = input.contents() else {
@@ -73,7 +76,6 @@ fn main() -> Result<()> {
 
     // Importing user colors
     if let Some(color_vec) = cli.color {
-        // let color_args = color_vec.collect::<Vec<_>>();
         app.palette
             .colors
             .iter_mut()

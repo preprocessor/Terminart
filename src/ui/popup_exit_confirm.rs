@@ -11,7 +11,7 @@ use super::centered_box;
 use super::DARK_TEXT;
 
 pub fn show(app: &mut App, f: &mut Frame) {
-    let area = f.size();
+    let area = f.area();
     let box_height = 7;
     let box_width = 19;
 

@@ -36,9 +36,9 @@ use crate::app::App;
 use crate::components::input::InputMode;
 
 pub fn render(app: &mut App, f: &mut Frame) {
-    let terminal_size = f.size();
+    let terminal_area = f.area();
 
-    if terminal_size.width < 70 || terminal_size.height < 30 {
+    if terminal_area.width < 70 || terminal_area.height < 30 {
         app.input_capture.change_mode(InputMode::TooSmall);
         too_small::show(f);
         return;
@@ -48,7 +48,7 @@ pub fn render(app: &mut App, f: &mut Frame) {
         Direction::Horizontal,
         [Constraint::Length(TOOLBOX_WIDTH), Constraint::Min(0)],
     )
-    .split(terminal_size);
+    .split(terminal_area);
 
     sidebar::render(app, f, main_layout[0]);
     canvas::render(app, f, main_layout[1]);

@@ -14,7 +14,7 @@ use super::{centered_box, WHITE};
 use super::{BG, BLACK, BUTTON_COLOR, COLOR_STEPS, COLOR_STEP_AMT, DARK_TEXT, TOOL_BORDER};
 
 pub fn show(app: &mut App, f: &mut Frame) {
-    let area = f.size();
+    let area = f.area();
     let box_height = 18;
     let box_width = 66;
 

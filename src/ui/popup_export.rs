@@ -12,7 +12,7 @@ use crate::components::save_load::FileSaveError;
 use super::{centered_box, DARK_TEXT, WHITE};
 
 pub fn show(app: &mut App, f: &mut Frame) {
-    let area = f.size();
+    let area = f.area();
     let has_message = app.input_capture.text_area.error.is_some();
     let box_height = if has_message { 9 } else { 7 };
     let box_width = 40;

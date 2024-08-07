@@ -29,7 +29,7 @@ pub fn show(f: &mut ratatui::Frame) {
     let help_width = 6 + HELP_TEXT.lines().skip(1).fold(0, |a, b| a.max(b.len())) as u16;
     let help_height = 4 + HELP_TEXT.lines().skip(1).count() as u16;
 
-    let help_area = centered_box(help_width, help_height, f.size());
+    let help_area = centered_box(help_width, help_height, f.area());
 
     let help_box = Block::default()
         .title(" HELP ")

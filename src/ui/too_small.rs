@@ -5,7 +5,7 @@ use ratatui::Frame;
 use super::centered_box;
 
 pub fn show(f: &mut Frame) {
-    let area = f.size();
+    let area = f.area();
     let message = "Terminal must be 30x70!";
     let (w, h) = (message.len() as _, message.lines().count() as _);
 
