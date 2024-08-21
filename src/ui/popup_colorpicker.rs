@@ -10,7 +10,7 @@ use crate::components::clicks::{ClickAction::PickColor, PickAction::*};
 use crate::components::input::color::TextFocus;
 
 use super::sidebar::Button;
-use super::{centered_box, WHITE};
+use super::{centered_box, RED, WHITE};
 use super::{BG, BLACK, BUTTON_COLOR, COLOR_STEPS, COLOR_STEP_AMT, DARK_TEXT, TOOL_BORDER};
 
 pub fn show(app: &mut App, f: &mut Frame) {
@@ -179,17 +179,16 @@ fn sliders(app: &mut App, f: &mut Frame, area: Rect) {
 fn preview_block(app: &mut App, f: &mut Frame, area: Rect) {
     let center = Layout::new(
         Direction::Horizontal,
-        [Constraint::Min(2), Constraint::Min(14), Constraint::Min(2)],
+        [Constraint::Min(3), Constraint::Min(12), Constraint::Min(3)],
     )
     .split(area)[1];
 
     let layout = Layout::new(
         Direction::Vertical,
         [
-            Constraint::Min(1),
-            Constraint::Min(7),
-            Constraint::Min(1),
-            Constraint::Min(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(6),
         ],
     )
     .split(center);
@@ -198,7 +197,18 @@ fn preview_block(app: &mut App, f: &mut Frame, area: Rect) {
 
     let preview = Block::new().bg(current_color);
 
-    f.render_widget(preview, layout[1]);
+    let x_button = Paragraph::new(Line::from(Button::custom("x", RED, WHITE)));
+    let x_button_area = Layout::new(
+        Direction::Horizontal,
+        [Constraint::Length(11), Constraint::Length(3)],
+    )
+    .split(layout[0])[1];
+
+    app.input_capture
+        .click_mode_popup(&x_button_area, PickColor(Exit));
+
+    f.render_widget(x_button, x_button_area);
+    f.render_widget(preview, layout[2]);
 }
 
 fn control_buttons(app: &mut App, f: &mut Frame, areas: std::rc::Rc<[Rect]>) {
@@ -214,7 +224,7 @@ fn control_buttons(app: &mut App, f: &mut Frame, areas: std::rc::Rc<[Rect]>) {
 fn hex_input_and_exit(app: &mut App, f: &mut Frame, area: Rect) {
     let layout = Layout::new(
         Direction::Vertical,
-        vec![Constraint::Min(1); area.height as usize],
+        vec![Constraint::Length(1); area.height as usize],
     )
     .split(area);
 
@@ -266,17 +276,13 @@ fn hex_input_and_exit(app: &mut App, f: &mut Frame, area: Rect) {
         f.render_widget(cursor_block, cursor_area);
     }
 
-    let exit_button = Paragraph::new(Line::from(Button::custom(
-        "Close",
-        Color::Rgb(180, 30, 30),
-        TOOL_BORDER,
-    )))
-    .alignment(Alignment::Center);
+    let exit_button = Paragraph::new(Line::from(Button::custom("Close", RED, WHITE)))
+        .alignment(Alignment::Center);
 
     app.input_capture
-        .click_mode_popup(&layout[3], PickColor(Exit));
+        .click_mode_popup(&layout[4], PickColor(Exit));
 
-    f.render_widget(exit_button, layout[3]);
+    f.render_widget(exit_button, layout[4]);
 }
 
 fn replace_palette_color(app: &mut App, f: &mut Frame, area: Rect) {

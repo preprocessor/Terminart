@@ -66,7 +66,8 @@ impl Tools {
             Tools::Circle => circle_tool(x, y, size, app),
             Tools::Point => {
                 let mut old_cell = LayerData::new();
-                old_cell.insert((x, y), app.draw(x, y));
+                // old_cell.insert((x, y), app.draw(x, y));
+                old_cell.insert((x, y), app.put_cell(x, y));
                 old_cell
             }
             Tools::Plus => plus(x, y, size, app),
@@ -79,7 +80,8 @@ impl Tools {
 pub fn plus(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
     let mut old_cells = LayerData::new();
 
-    old_cells.insert((x, y), app.draw(x, y));
+    // old_cells.insert((x, y), app.draw(x, y));
+    old_cells.insert((x, y), app.put_cell(x, y));
 
     if size == 1 {
         return old_cells;
@@ -91,11 +93,13 @@ pub fn plus(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
             let y_arm = s * i + y as i16;
             if x_arm >= 0 {
                 let x_arm = x_arm as u16;
-                old_cells.insert((x_arm, y), app.draw(x_arm, y));
+                // old_cells.insert((x_arm, y), app.draw(x_arm, y));
+                old_cells.insert((x, y), app.put_cell(x_arm, y));
             }
             if y_arm >= 0 {
                 let y_arm = y_arm as u16;
-                old_cells.insert((x, y_arm), app.draw(x, y_arm));
+                // old_cells.insert((x, y_arm), app.draw(x, y_arm));
+                old_cells.insert((x, y), app.put_cell(x, y_arm));
             }
         }
     }
@@ -106,7 +110,8 @@ pub fn plus(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
 pub fn horiz(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
     let mut old_cells = LayerData::new();
 
-    old_cells.insert((x, y), app.draw(x, y));
+    // old_cells.insert((x, y), app.draw(x, y));
+    old_cells.insert((x, y), app.put_cell(x, y));
 
     if size == 1 {
         return old_cells;
@@ -117,7 +122,8 @@ pub fn horiz(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
             let x_arm = s * i + x as i16;
             if x_arm >= 0 {
                 let x_arm = x_arm as u16;
-                old_cells.insert((x_arm, y), app.draw(x_arm, y));
+                // old_cells.insert((x_arm, y), app.draw(x_arm, y));
+                old_cells.insert((x, y), app.put_cell(x_arm, y));
             }
         }
     }
@@ -128,7 +134,8 @@ pub fn horiz(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
 pub fn vert(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
     let mut old_cells = LayerData::new();
 
-    old_cells.insert((x, y), app.draw(x, y));
+    // old_cells.insert((x, y), app.draw(x, y));
+    old_cells.insert((x, y), app.put_cell(x, y));
 
     if size == 1 {
         return old_cells;
@@ -139,7 +146,8 @@ pub fn vert(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
             let y_arm = s * i + y as i16;
             if y_arm >= 0 {
                 let y_arm = y_arm as u16;
-                old_cells.insert((x, y_arm), app.draw(x, y_arm));
+                // old_cells.insert((x, y_arm), app.draw(x, y_arm));
+                old_cells.insert((x, y), app.put_cell(x, y_arm));
             }
         }
     }
@@ -204,7 +212,8 @@ fn circle_tool(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
                     continue;
                 }
                 let (fx, fy) = (fx as u16, fy as u16);
-                old_cells.insert((fx, fy), app.draw(fx, fy));
+                // old_cells.insert((fx, fy), app.draw(fx, fy));
+                old_cells.insert((fx, fy), app.put_cell(fx, fy));
             }
         }
     }
@@ -230,7 +239,8 @@ fn box_tool(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
                 if old_cells.contains_key(&(x, y)) {
                     continue;
                 }
-                old_cells.insert((x, y), app.draw(x, y));
+                // old_cells.insert((x, y), app.draw(x, y));
+                old_cells.insert((x, y), app.put_cell(x, y));
             }
         } else {
             for x in [left, right - 1] {
@@ -242,7 +252,8 @@ fn box_tool(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
                 if old_cells.contains_key(&(x, y)) {
                     continue;
                 }
-                old_cells.insert((x, y), app.draw(x, y));
+                // old_cells.insert((x, y), app.draw(x, y));
+                old_cells.insert((x, y), app.put_cell(x, y));
             }
         }
     }
@@ -263,7 +274,8 @@ fn square_tool(x: u16, y: u16, size: u16, app: &mut App) -> LayerData {
             if old_cells.contains_key(&(x, y)) {
                 continue;
             }
-            old_cells.insert((x, y), app.draw(x, y));
+            // old_cells.insert((x, y), app.draw(x, y));
+            old_cells.insert((x, y), app.put_cell(x, y));
         }
     }
     old_cells

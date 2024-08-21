@@ -1,4 +1,4 @@
-use crate::app::{App, Result};
+use crate::app::{App, AppResult};
 use crate::components::cell::Cell;
 use crate::components::clicks::*;
 use crate::components::input::{InputMode, MouseMode};
@@ -87,13 +87,13 @@ impl EventHandler {
     ///
     /// This function will always block the current thread if
     /// there is no data available and it's possible for more data to be sent.
-    pub fn next(&self) -> Result<Event> {
+    pub fn next(&self) -> AppResult<Event> {
         Ok(self.receiver.recv()?)
     }
 }
 
 /// Handles the key events and updates the state of [`App`].
-pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
+pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     match app.input_capture.mode {
         InputMode::Normal => normal_mode_keymaps(key_event, app)?,
         InputMode::Rename => rename_mode_keymaps(key_event, app),
@@ -129,11 +129,17 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> Result<()> {
             KeyCode::Esc | KeyCode::Char('Q') => app.quit(),
             _ => {}
         },
+
+        #[cfg(debug_assertions)]
+        InputMode::Debug => match key_event.code {
+            KeyCode::Char('d' | 'D') => app.input_capture.toggle_debug(),
+            _ => {}
+        },
     }
     Ok(())
 }
 
-pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
+pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> AppResult<()> {
     let (x, y) = (event.column, event.row);
 
     match app.input_capture.mode {
@@ -208,6 +214,9 @@ pub fn handle_mouse_events(event: MouseEvent, app: &mut App) -> Result<()> {
             };
         }
         InputMode::TooSmall => {}
+
+        #[cfg(debug_assertions)]
+        InputMode::Debug => {}
     }
     Ok(())
 }
@@ -279,6 +288,7 @@ fn color_mode_keymaps(key_event: KeyEvent, app: &mut App) {
                 app.input_capture.color_picker.input('c');
             }
         }
+        KeyCode::Char('Q') => app.input_capture.change_mode(InputMode::Exit),
         KeyCode::Char(ch) => app.input_capture.color_picker.input(ch),
         KeyCode::Esc => app.input_capture.exit(),
         KeyCode::Tab | KeyCode::Down => app.input_capture.color_picker.tab(),
@@ -298,12 +308,15 @@ fn rename_mode_keymaps(key_event: KeyEvent, app: &mut App) {
     match key_event.code {
         KeyCode::Char('c') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
+                // Exit application on `Ctrl-C`
                 app.input_capture.change_mode(InputMode::Exit)
             } else {
                 app.input_capture.text_area.input('c', 20);
             }
         }
+        // Input text
         KeyCode::Char(ch) => app.input_capture.text_area.input(ch, 20),
+        // Keymaps
         KeyCode::Esc => app.input_capture.exit(),
         KeyCode::Backspace => app.input_capture.text_area.backspace(),
         KeyCode::Delete => app.input_capture.text_area.delete(),
@@ -322,7 +335,7 @@ fn rename_mode_keymaps(key_event: KeyEvent, app: &mut App) {
     }
 }
 
-fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> Result<()> {
+fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
     match key_event.code {
         // Exit application on `ESC` or `Q`
         KeyCode::Esc | KeyCode::Char('Q') => app.input_capture.change_mode(InputMode::Exit),
@@ -365,12 +378,20 @@ fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> Result<()> {
         KeyCode::Char('Y') => copy_canvas_text(app)?,
         KeyCode::Char('y') => copy_canvas_ansi(app)?,
         // Use clipboard to set brush char
-        KeyCode::Char('p') => clip_brush(app),
+        KeyCode::Char('p') => {
+            if let Ok(s) = cli_clipboard::get_contents() {
+                if let Some(c) = s.chars().next() {
+                    app.brush.char = c;
+                }
+            }
+        }
         // Help window
         KeyCode::Char('?') => app.input_capture.toggle_help(),
         // Undo / Redo
         KeyCode::Char('u') => app.undo(),
         KeyCode::Char('U') => app.redo(),
+        #[cfg(debug_assertions)]
+        KeyCode::Char('d' | 'D') => app.input_capture.toggle_debug(),
         _ => {}
     }
     Ok(())
@@ -405,7 +426,7 @@ fn color_mode_mouse(event: MouseEvent, app: &mut App, x: u16, y: u16) {
     }
 }
 
-fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result<()> {
+fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> AppResult<()> {
     match event.kind {
         Down(btn) => {
             if let Some(&action) = app.input_capture.get(x, y) {
@@ -425,7 +446,8 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
 
                         app.input_capture.mouse_mode = MouseMode::Click;
 
-                        let drawn_cells = draw_wrapper(x, y, app);
+                        // let drawn_cells = draw_wrapper(x, y, app);
+                        let drawn_cells = app.draw(x, y);
                         let layer_id = app.canvas.get_active_layer().id;
 
                         app.history.draw(layer_id, drawn_cells);
@@ -501,7 +523,7 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
 
                 app.input_capture.mouse_mode = MouseMode::Drag;
 
-                let old_data = draw_wrapper(x, y, app);
+                let old_data = app.draw(x, y);
 
                 app.history.add_partial_draw(old_data);
             }
@@ -524,40 +546,8 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> Result
     Ok(())
 }
 
-fn draw_wrapper(x: u16, y: u16, app: &mut App) -> LayerData {
-    let x = x - TOOLBOX_WIDTH;
-
-    let size = app.brush.size;
-    let tool = app.brush.tool;
-
-    let mut old_cells = LayerData::new();
-
-    let path = connect_points((x, y), app.canvas.last_pos);
-
-    for (x, y) in path {
-        let mut partial_draw_step = tool.draw(x, y, size, app);
-
-        partial_draw_step.extend(old_cells);
-
-        old_cells = partial_draw_step;
-    }
-
-    app.canvas.last_pos = Some((x, y));
-
-    old_cells
-}
-
-fn clip_brush(app: &mut App) {
-    if let Ok(s) = cli_clipboard::get_contents() {
-        if let Some(c) = s.chars().next() {
-            app.brush.char = c;
-        }
-    }
-}
-
 fn convert_color(c: Color) -> Option<anstyle::Color> {
     Some(match c {
-        Color::Reset => return None,
         Color::Black => AnsiColor::Black.into(),
         Color::Red => AnsiColor::Red.into(),
         Color::Green => AnsiColor::Green.into(),
@@ -576,6 +566,8 @@ fn convert_color(c: Color) -> Option<anstyle::Color> {
         Color::White => AnsiColor::White.into(),
         Color::Rgb(r, g, b) => RgbColor(r, g, b).into(),
         Color::Indexed(i) => Ansi256Color(i).into(),
+        // Anstyle has no reset code, instead we return None instead of Some(Color)
+        Color::Reset => return None,
     })
 }
 
@@ -642,7 +634,7 @@ fn get_canvas_ansi(app: &mut App) -> Option<String> {
     Some(lines_vec.join("\n"))
 }
 
-fn copy_canvas_ansi(app: &mut App) -> Result<()> {
+fn copy_canvas_ansi(app: &mut App) -> AppResult<()> {
     let Some(output_str) = get_canvas_ansi(app) else {
         return Ok(());
     };
@@ -673,7 +665,7 @@ fn get_canvas_text(app: &mut App) -> Option<String> {
     Some(lines_vec.join("\n"))
 }
 
-fn copy_canvas_text(app: &mut App) -> Result<()> {
+fn copy_canvas_text(app: &mut App) -> AppResult<()> {
     let Some(output_str) = get_canvas_text(app) else {
         return Ok(());
     };
@@ -685,7 +677,7 @@ fn copy_canvas_text(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> Result<(LayerData, u32)> {
+fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> AppResult<(LayerData, u32)> {
     let clipboard = cli_clipboard::get_contents()?;
     let mut old_cells = LayerData::new();
     for (dy, row) in clipboard.split('\n').enumerate() {
@@ -705,57 +697,6 @@ fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> Result<(LayerData, u32)> 
 
     let active_id = app.canvas.layers[app.canvas.active].id;
     Ok((old_cells, active_id))
-}
-
-fn connect_points(start: (u16, u16), end: Option<(u16, u16)>) -> Vec<(u16, u16)> {
-    let Some(end) = end else {
-        return vec![start];
-    };
-
-    let start_x = start.0 as i16;
-    let start_y = start.1 as i16;
-    let end_x = end.0 as i16;
-    let end_y = end.1 as i16;
-
-    let x_diff = start_x - end_x;
-    let y_diff = start_y - end_y;
-    let x_diff_abs = x_diff.abs();
-    let y_diff_abs = y_diff.abs();
-
-    let x_is_larger = x_diff_abs > y_diff_abs;
-
-    let x_mod = if x_diff < 0 { 1 } else { -1 };
-    let y_mod = if y_diff < 0 { 1 } else { -1 };
-
-    let longer_side = x_diff_abs.max(y_diff_abs);
-    let shorter_side = x_diff_abs.min(y_diff_abs);
-
-    let slope = if longer_side == 0 {
-        0.0
-    } else {
-        shorter_side as f64 / longer_side as f64
-    };
-
-    let mut out = Vec::with_capacity(longer_side as usize);
-
-    for i in 1..=longer_side {
-        let shorter_side_increase = (i as f64 * slope).round() as i16;
-
-        let (x_add, y_add) = if x_is_larger {
-            (i, shorter_side_increase)
-        } else {
-            (shorter_side_increase, i)
-        };
-
-        let new_x = start_x + x_add * x_mod;
-        let new_y = start_y + y_add * y_mod;
-
-        if let (Ok(x), Ok(y)) = (u16::try_from(new_x), u16::try_from(new_y)) {
-            out.push((x, y))
-        }
-    }
-
-    out
 }
 
 fn save_file(app: &mut App) -> core::result::Result<(), FileSaveError> {

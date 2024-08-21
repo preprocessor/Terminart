@@ -1,3 +1,10 @@
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::style::Color::{self, Rgb as rgb}; //  make the struct work with rgb highlighter
+use ratatui::Frame;
+
+use crate::app::App;
+use crate::components::input::InputMode;
+
 mod canvas;
 mod popup_colorpicker;
 mod popup_exit_confirm;
@@ -5,8 +12,11 @@ mod popup_export;
 mod popup_help;
 mod popup_rename;
 mod popup_save;
+mod screen_too_small;
 mod sidebar;
-mod too_small;
+
+#[cfg(debug_assertions)]
+mod debug_mode;
 
 pub const TOOLBOX_WIDTH: u16 = 30;
 pub const _COLOR_STEPS: u8 = 32;
@@ -26,22 +36,26 @@ pub const BUTTON_COLOR: Color = rgb(85, 165, 165);
 pub const SEL_BUTTON_COLOR: Color = rgb(120, 190, 210);
 pub const ACCENT_BUTTON_COLOR: Color = rgb(172, 188, 255);
 pub const DARK_TEXT: Color = rgb(35, 42, 46);
+pub const RED: Color = rgb(140, 14, 14);
 pub const YELLOW: Color = rgb(223, 160, 0);
-
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
-use ratatui::style::Color::{self, Rgb as rgb}; //  make the struct work with rgb highlighter
-use ratatui::Frame;
-
-use crate::app::App;
-use crate::components::input::InputMode;
 
 pub fn render(app: &mut App, f: &mut Frame) {
     let terminal_area = f.area();
 
+    #[cfg(debug_assertions)]
+    if app.input_capture.mode == InputMode::Debug {
+        debug_mode::show(app, f);
+        return;
+    }
+
     if terminal_area.width < 70 || terminal_area.height < 30 {
         app.input_capture.change_mode(InputMode::TooSmall);
-        too_small::show(f);
+        screen_too_small::show(f);
         return;
+    }
+
+    if app.input_capture.mode == InputMode::TooSmall {
+        app.input_capture.change_mode(InputMode::Normal);
     }
 
     let main_layout = Layout::new(

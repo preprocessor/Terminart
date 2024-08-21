@@ -7,7 +7,7 @@ use ratatui::backend::Backend;
 use ratatui::Terminal;
 use std::io;
 
-use crate::app::{App, Result};
+use crate::app::{App, AppResult};
 use crate::handler::EventHandler;
 use crate::ui;
 
@@ -25,14 +25,16 @@ pub struct Tui<B: Backend> {
 
 impl<B: Backend> Tui<B> {
     /// Constructs a new instance of [`Tui`].
-    pub fn new(terminal: Terminal<B>, events: EventHandler) -> Self {
-        Self { terminal, events }
+    pub fn new(terminal: Terminal<B>, events: EventHandler) -> AppResult<Self> {
+        let mut this = Self { terminal, events };
+        this.init()?;
+        Ok(this)
     }
 
     /// Initializes the terminal interface.
     ///
     /// It enables the raw mode and sets terminal properties.
-    pub fn init(&mut self) -> Result<()> {
+    pub fn init(&mut self) -> AppResult<()> {
         terminal::enable_raw_mode()?;
         crossterm::execute!(
             io::stderr(),
@@ -61,10 +63,8 @@ impl<B: Backend> Tui<B> {
     ///
     /// [`Draw`]: ratatui::Terminal::draw
     /// [`rendering`]: crate::ui:render
-    pub fn render(&mut self, app: &mut App) -> Result<()> {
-        self.terminal.draw(|frame| {
-            ui::render(app, frame);
-        })?;
+    pub fn render(&mut self, app: &mut App) -> AppResult<()> {
+        self.terminal.draw(|frame| ui::render(app, frame))?;
         Ok(())
     }
 
@@ -72,7 +72,7 @@ impl<B: Backend> Tui<B> {
     ///
     /// This function is also used for the panic hook to revert
     /// the terminal properties if unexpected errors occur.
-    fn reset() -> Result<()> {
+    fn reset() -> AppResult<()> {
         terminal::disable_raw_mode()?;
         crossterm::execute!(
             io::stderr(),
@@ -86,7 +86,7 @@ impl<B: Backend> Tui<B> {
     /// Exits the terminal interface.
     ///
     /// It disables the raw mode and reverts back the terminal properties.
-    pub fn exit(&mut self) -> Result<()> {
+    pub fn exit(&mut self) -> AppResult<()> {
         Self::reset()?;
         self.terminal.show_cursor()?;
         Ok(())

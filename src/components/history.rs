@@ -19,7 +19,9 @@ pub struct History {
 
 impl History {
     pub fn draw(&mut self, id: u32, data: LayerData) {
-        self.past.push(HistoryAction::Draw(id, data));
+        if !data.is_empty() {
+            self.past.push(HistoryAction::Draw(id, data));
+        }
     }
 
     pub fn add_layer(&mut self, id: u32) {
@@ -55,24 +57,17 @@ impl History {
     }
 
     pub fn finish_partial_draw(&mut self, layer_id: u32) {
-        let Some(partial_draw) = self.partial_draw.take() else {
-            return;
-        };
-
-        self.draw(layer_id, partial_draw);
+        if let Some(partial_draw) = self.partial_draw.take() {
+            self.draw(layer_id, partial_draw);
+        }
     }
 
     pub fn click_to_partial_draw(&mut self) {
-        let last_action = self.past.pop();
-
-        let Some(hist_action) = last_action else {
-            return;
-        };
-
-        if let HistoryAction::Draw(_, data) = hist_action {
-            self.add_partial_draw(data);
-        } else {
-            self.past.push(hist_action);
+        if let Some(action) = self.past.pop() {
+            match action {
+                HistoryAction::Draw(_, data) => self.add_partial_draw(data),
+                other => self.past.push(other),
+            }
         }
     }
 }

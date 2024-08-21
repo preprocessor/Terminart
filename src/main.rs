@@ -2,7 +2,7 @@ use clap::{command, Parser};
 use clap_stdin::FileOrStdin;
 use ratatui::style::Color;
 use regex::Regex;
-use terminart::app::{App, Result};
+use terminart::app::{App, AppResult};
 use terminart::components::save_load::{AnsiData, SaveData};
 use terminart::handler::{handle_key_events, handle_mouse_events};
 use terminart::handler::{Event, EventHandler};
@@ -29,14 +29,14 @@ struct Cli {
     color: Option<Vec<Color>>,
 }
 
-fn main() -> Result<()> {
-    // Create an application.
+fn main() -> AppResult<()> {
+    // Create the application.
     let mut app = App::new();
 
     // Setup command line interface
     let cli = Cli::parse();
 
-    // Load user input
+    // Load canvas from user input
     if let Some(input) = cli.input {
         if input.is_file() {
             let file_str = input.filename();
@@ -88,11 +88,8 @@ fn main() -> Result<()> {
     let backend = CrosstermBackend::new(io::stderr());
     let terminal = Terminal::new(backend)?;
     let events = EventHandler::new(250 /* ms */);
-    let mut tui = Tui::new(terminal, events);
+    let mut tui = Tui::new(terminal, events)?;
 
-    tui.init()?;
-
-    // Start the main loop.
     while app.running {
         // Render the interface.
         tui.render(&mut app)?;
@@ -116,7 +113,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn color_parser(c: &str) -> core::result::Result<Color, String> {
+fn color_parser(c_str: &str) -> core::result::Result<Color, String> {
     let full_hex_regex = Regex::new(r#"#([0-9a-fA-F].)(..)(..)"#).unwrap();
     let half_hex_regex = Regex::new(r#"#([0-9a-fA-F])(.)(.)"#).unwrap();
     let full_rgb_regex = Regex::new(r#"rgb\((\d+), ?(\d+), ?(\d+)\)"#).unwrap();
@@ -126,7 +123,7 @@ fn color_parser(c: &str) -> core::result::Result<Color, String> {
         .into_iter()
         .enumerate()
     {
-        let captures = regex.captures(c).map(|captures| {
+        let captures = regex.captures(c_str).map(|captures| {
             captures
                 .iter() // All the captured groups
                 .skip(1) // Skipping the complete match
@@ -151,14 +148,14 @@ fn color_parser(c: &str) -> core::result::Result<Color, String> {
                 _ => vec![],
             };
 
-            if result_vec.iter().any(|v| v.is_err()) {
-                return Err(format!("Invalid color format: {}", c));
+            if result_vec.iter().any(Result::is_err) {
+                return Err(format!("Invalid color format: {}", c_str));
             } else {
-                let vals: Vec<_> = result_vec.into_iter().map(|v| v.unwrap()).collect();
+                let vals: Vec<_> = result_vec.into_iter().map(Result::unwrap).collect();
                 return Ok(Color::Rgb(vals[0], vals[1], vals[2]));
             }
         }
     }
 
-    Err(format!("Invalid color format: {}", c))
+    Err(format!("Invalid color format: {}", c_str))
 }

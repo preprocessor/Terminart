@@ -18,6 +18,8 @@ pub enum InputMode {
     Save,
     Exit,
     TooSmall,
+    #[cfg(debug_assertions)]
+    Debug,
 }
 
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
@@ -114,5 +116,14 @@ impl InputCapture {
         let out: String = self.text_area.buffer.chars().take(20).collect();
         self.exit();
         Some(out)
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn toggle_debug(&mut self) {
+        if self.mode == InputMode::Debug {
+            self.mode = InputMode::Normal;
+        } else {
+            self.mode = InputMode::Debug;
+        }
     }
 }

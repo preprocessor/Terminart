@@ -1,13 +1,14 @@
 use crate::components::brush::Brush;
 use crate::components::cell::Cell;
 use crate::components::charpicker::CharPicker;
+use crate::components::history::{History, HistoryAction};
 use crate::components::input::InputCapture;
 use crate::components::layers::{LayerData, Layers};
 use crate::components::palette::Palette;
-use crate::components::undo::{History, HistoryAction};
+use crate::ui::TOOLBOX_WIDTH;
 
 /// Application result type.
-pub type Result<T> = core::result::Result<T, Box<dyn std::error::Error>>;
+pub type AppResult<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Application.
 #[derive(Default, Debug)]
@@ -58,7 +59,40 @@ impl App {
         old_cell
     }
 
-    pub fn draw(&mut self, x: u16, y: u16) -> Cell {
+    pub fn draw(&mut self, x: u16, y: u16) -> LayerData {
+        let x = x - TOOLBOX_WIDTH;
+
+        let size = self.brush.size;
+        let tool = self.brush.tool;
+        let mut old_cells = LayerData::new();
+
+        let path = connect_points((x, y), self.canvas.last_pos);
+
+        for (x, y) in path {
+            let mut partial_draw_step = tool.draw(x, y, size, self);
+
+            partial_draw_step.extend(old_cells);
+
+            old_cells = partial_draw_step;
+        }
+
+        self.canvas.last_pos = Some((x, y));
+
+        old_cells
+    }
+
+    pub fn put_cell(&mut self, x: u16, y: u16) -> Cell {
+        let layer = self.canvas.current_layer_mut();
+        let new_cell = self.brush.as_cell();
+
+        let old_cell = layer.data.insert((x, y), new_cell).unwrap_or_default();
+
+        self.history.forget_redo();
+
+        old_cell
+    }
+
+    pub fn old_draw(&mut self, x: u16, y: u16) -> Cell {
         let layer = self.canvas.current_layer_mut();
         let new_cell = self.brush.as_cell();
 
@@ -181,4 +215,55 @@ impl App {
         self.brush = Brush::default();
         self.canvas.queue_render();
     }
+}
+
+fn connect_points(start: (u16, u16), end: Option<(u16, u16)>) -> Vec<(u16, u16)> {
+    let Some(end) = end else {
+        return vec![start];
+    };
+
+    let start_x = start.0 as i16;
+    let start_y = start.1 as i16;
+    let end_x = end.0 as i16;
+    let end_y = end.1 as i16;
+
+    let x_diff = start_x - end_x;
+    let y_diff = start_y - end_y;
+    let x_diff_abs = x_diff.abs();
+    let y_diff_abs = y_diff.abs();
+
+    let x_is_larger = x_diff_abs > y_diff_abs;
+
+    let x_mod = if x_diff < 0 { 1 } else { -1 };
+    let y_mod = if y_diff < 0 { 1 } else { -1 };
+
+    let longer_side = x_diff_abs.max(y_diff_abs);
+    let shorter_side = x_diff_abs.min(y_diff_abs);
+
+    let slope = if longer_side == 0 {
+        0.0
+    } else {
+        shorter_side as f64 / longer_side as f64
+    };
+
+    let mut out = Vec::with_capacity(longer_side as usize);
+
+    for i in 1..=longer_side {
+        let shorter_side_increase = (i as f64 * slope).round() as i16;
+
+        let (x_add, y_add) = if x_is_larger {
+            (i, shorter_side_increase)
+        } else {
+            (shorter_side_increase, i)
+        };
+
+        let new_x = start_x + x_add * x_mod;
+        let new_y = start_y + y_add * y_mod;
+
+        if let (Ok(x), Ok(y)) = (u16::try_from(new_x), u16::try_from(new_y)) {
+            out.push((x, y))
+        }
+    }
+
+    out
 }
