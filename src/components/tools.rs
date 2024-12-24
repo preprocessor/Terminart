@@ -66,7 +66,6 @@ impl Tools {
             Tools::Circle => circle_tool(x, y, size, app),
             Tools::Point => {
                 let mut old_cell = LayerData::new();
-                // old_cell.insert((x, y), app.draw(x, y));
                 old_cell.insert((x, y), app.put_cell(x, y));
                 old_cell
             }

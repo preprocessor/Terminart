@@ -20,7 +20,7 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
     let width = block_inner.width as f64;
     let height = block_inner.height as f64;
 
-    let render = app.canvas.render();
+    let render = app.layers.render();
 
     let canvas = Canvas::default()
         .x_bounds([0.0, width])

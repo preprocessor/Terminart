@@ -67,7 +67,7 @@ fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
 }
 
 fn render_layers(app: &mut App, f: &mut Frame, area: Rect) {
-    let layers_count = app.canvas.layers.len();
+    let layers_count = app.layers.layers.len();
 
     let mut constraints = vec![Constraint::Max(1); layers_count];
     constraints.push(Constraint::Min(0));
@@ -84,9 +84,9 @@ fn render_layers(app: &mut App, f: &mut Frame, area: Rect) {
 
     f.render_widget(Block::new().bg(BG_LAYER_MANAGER), rows[layers_count]);
 
-    for (i, (name, show)) in app.canvas.get_display_info() {
+    for (i, (name, show)) in app.layers.get_display_info() {
         let index = layers_count - (i + 1);
-        let is_active_layer = index == app.canvas.active;
+        let is_active_layer = index == app.layers.active;
 
         // Selected layer background
         if is_active_layer {

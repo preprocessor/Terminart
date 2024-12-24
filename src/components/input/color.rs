@@ -23,8 +23,6 @@ pub struct ColorPicker {
     pub r: u8,
     pub g: u8,
     pub b: u8,
-    // pub buffer: String,
-    // pub pos: usize,
     pub text: TextArea,
     pub focus: TextFocus,
     last_update: Instant,
@@ -36,8 +34,6 @@ impl Default for ColorPicker {
             r: 0,
             g: 0,
             b: 0,
-            // buffer: String::default(),
-            // pos: 0,
             text: TextArea::default(),
             focus: TextFocus::default(),
             last_update: Instant::now(),
@@ -62,7 +58,7 @@ impl ColorPicker {
         self.text.pos as u16
     }
 
-    /// Returns a ratatui Color enum of the current color
+    /// Returns a ratatui Color of the current RGB values
     pub fn get_style_color(&self) -> Color {
         Color::Rgb(self.r, self.g, self.b)
     }
@@ -135,8 +131,7 @@ impl ColorPicker {
                 let mut new_hex = String::with_capacity(6);
 
                 for char in buffer.chars() {
-                    new_hex.push(char);
-                    new_hex.push(char);
+                    new_hex += &format!("{}{}", char, char);
                 }
 
                 *buffer = new_hex;

@@ -11,6 +11,7 @@ use crossterm::event::MouseEventKind::{Down, Drag, Up};
 use crossterm::event::{self, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 use ratatui::style::Color;
 
+use std::borrow::Borrow;
 use std::time::{Duration, Instant};
 use std::{fs::File, io::Write, sync::mpsc, thread};
 
@@ -106,7 +107,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
                     app.input_capture.change_mode(InputMode::Exit)
                 }
             }
-            KeyCode::Esc => app.input_capture.toggle_help(),
+            KeyCode::Esc | KeyCode::Char('?') => app.input_capture.toggle_help(),
             KeyCode::Char('Q') => app.input_capture.change_mode(InputMode::Exit),
             _ => {}
         },
@@ -117,7 +118,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
                 }
             }
             KeyCode::Char('Q' | 'y' | 'Y') => app.quit(),
-            KeyCode::Esc | KeyCode::Char('n') => app.input_capture.exit(),
+            KeyCode::Esc | KeyCode::Char('n' | 'N') => app.input_capture.exit(),
             _ => {}
         },
         InputMode::TooSmall => match key_event.code {
@@ -133,6 +134,7 @@ pub fn handle_key_events(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         #[cfg(debug_assertions)]
         InputMode::Debug => match key_event.code {
             KeyCode::Char('d' | 'D') => app.input_capture.toggle_debug(),
+            KeyCode::Esc | KeyCode::Char('Q') => app.quit(),
             _ => {}
         },
     }
@@ -350,9 +352,9 @@ fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         KeyCode::Char('s') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
                 app.input_capture.change_mode(InputMode::Save);
-                if let Some(last_file_name) = app.input_capture.last_file_name.clone() {
+                if let Some(last_file_name) = app.input_capture.last_file_name.borrow() {
                     app.input_capture.text_area.pos = last_file_name.len();
-                    app.input_capture.text_area.buffer = last_file_name;
+                    app.input_capture.text_area.buffer = last_file_name.into();
                 }
             } else {
                 // Brush size
@@ -362,9 +364,9 @@ fn normal_mode_keymaps(key_event: KeyEvent, app: &mut App) -> AppResult<()> {
         KeyCode::Char('e') => {
             if key_event.modifiers == KeyModifiers::CONTROL {
                 app.input_capture.change_mode(InputMode::Export);
-                if let Some(last_file_name) = app.input_capture.last_file_name.clone() {
+                if let Some(last_file_name) = app.input_capture.last_file_name.borrow() {
                     app.input_capture.text_area.pos = last_file_name.len();
-                    app.input_capture.text_area.buffer = last_file_name;
+                    app.input_capture.text_area.buffer = last_file_name.into();
                 }
             }
         }
@@ -448,7 +450,7 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> AppRes
 
                         // let drawn_cells = draw_wrapper(x, y, app);
                         let drawn_cells = app.draw(x, y);
-                        let layer_id = app.canvas.get_active_layer().id;
+                        let layer_id = app.layers.get_active_layer().id;
 
                         app.history.draw(layer_id, drawn_cells);
                     }
@@ -479,27 +481,27 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> AppRes
                     },
                     ClickAction::Layer(action) => match action {
                         LayerAction::Add => {
-                            let new_layer_id = app.canvas.add_layer();
+                            let new_layer_id = app.layers.add_layer();
                             app.history.add_layer(new_layer_id);
                         }
-                        LayerAction::Select(index) => app.canvas.set_active_layer(index),
+                        LayerAction::Select(index) => app.layers.set_active_layer(index),
                         LayerAction::Remove => app.remove_active_layer(),
                         LayerAction::Rename => app.input_capture.change_mode(InputMode::Rename),
                         LayerAction::MoveUp => {
-                            let layer_id = app.canvas.get_active_layer().id;
-                            let move_was_sucessful = app.canvas.move_layer_up_by_id(layer_id);
+                            let layer_id = app.layers.get_active_layer().id;
+                            let move_was_sucessful = app.layers.move_layer_up_by_id(layer_id);
                             if move_was_sucessful {
                                 app.history.layer_up(layer_id);
                             }
                         }
                         LayerAction::MoveDown => {
-                            let layer_id = app.canvas.get_active_layer().id;
-                            let move_was_sucessful = app.canvas.move_layer_down_by_id(layer_id);
+                            let layer_id = app.layers.get_active_layer().id;
+                            let move_was_sucessful = app.layers.move_layer_down_by_id(layer_id);
                             if move_was_sucessful {
                                 app.history.layer_down(layer_id);
                             }
                         }
-                        LayerAction::ToggleVis(index) => app.canvas.toggle_visible(index),
+                        LayerAction::ToggleVis(index) => app.layers.toggle_visible(index),
                     },
                     ClickAction::PickColor(PickAction::New) => {
                         app.input_capture.change_mode(InputMode::Color)
@@ -530,11 +532,11 @@ fn normal_mouse_mode(event: MouseEvent, app: &mut App, x: u16, y: u16) -> AppRes
         }
         Up(MouseButton::Left | MouseButton::Right) => {
             if event.modifiers != KeyModifiers::CONTROL {
-                app.canvas.last_pos = None;
+                app.layers.last_pos = None;
             }
 
             if app.input_capture.mouse_mode == MouseMode::Drag {
-                let layer_id = app.canvas.get_active_layer().id;
+                let layer_id = app.layers.get_active_layer().id;
                 app.history.finish_partial_draw(layer_id);
             }
 
@@ -574,7 +576,7 @@ fn convert_color(c: Color) -> Option<anstyle::Color> {
 fn get_drawing_region(app: &mut App) -> Option<(u16, u16, u16, u16, LayerData)> {
     let (mut left, mut bottom) = (u16::MAX, u16::MAX);
     let (mut right, mut top) = (u16::MIN, u16::MIN);
-    let page = app.canvas.render();
+    let page = app.layers.render();
     for &(x, y) in page.keys() {
         left = left.min(x);
         right = right.max(x);
@@ -695,7 +697,7 @@ fn paste_into_canvas(app: &mut App, x: u16, y: u16) -> AppResult<(LayerData, u32
         }
     }
 
-    let active_id = app.canvas.layers[app.canvas.active].id;
+    let active_id = app.layers.layers[app.layers.active].id;
     Ok((old_cells, active_id))
 }
 
@@ -739,7 +741,7 @@ fn export_file(app: &mut App) -> core::result::Result<(), FileSaveError> {
     let save_data = SaveData {
         brush: app.brush,
         palette: app.palette.clone(),
-        layers: app.canvas.layers.clone(),
+        layers: app.layers.layers.clone(),
     };
 
     ciborium::into_writer(&save_data, &mut file).map_err(|_| FileSaveError::Other)?;

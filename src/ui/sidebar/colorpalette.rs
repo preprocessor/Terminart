@@ -65,7 +65,8 @@ fn render_buttons(app: &mut App, f: &mut Frame, area: Rect) {
                 Span::raw("▗").fg(color),
                 Span::raw("▄").style(style),
                 Span::raw("▖").fg(color),
-            ]);
+            ]); // ▗▄▖
+
             let bot_line = Line::from(Span::raw("▝▀▘").fg(color));
 
             let color_pg = Paragraph::new(vec![top_line, bot_line]);

@@ -24,7 +24,7 @@ pub fn show(app: &mut App, f: &mut Frame) {
     let block = Block::new()
         .title(format!(
             " Rename layer: {} ",
-            app.canvas.get_active_layer().name
+            app.layers.get_active_layer().name
         ))
         .title_alignment(Alignment::Center)
         .title_style(Style::new().reversed().bold())

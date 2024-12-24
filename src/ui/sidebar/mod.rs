@@ -61,6 +61,7 @@ pub fn render(app: &mut App, f: &mut Frame, area: Rect) {
 }
 
 pub struct Button;
+
 impl Button {
     pub fn custom(label: &str, bg: Color, fg: Color) -> Vec<Span> {
         vec![

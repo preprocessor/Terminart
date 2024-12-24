@@ -42,12 +42,12 @@ pub struct Layers {
 
 impl Default for Layers {
     fn default() -> Self {
-        let (layer0, id0) = Layer::new();
+        let (layer, id) = Layer::new();
         Self {
-            layers: vec![layer0],
+            layers: vec![layer],
             active: 0,
             last_pos: None,
-            id_list: vec![id0],
+            id_list: vec![id],
             rendered: None,
         }
     }
@@ -56,13 +56,14 @@ impl Default for Layers {
 impl Layers {
     /// This checks the [selected] property against the amount of [Layers]
     /// It will add a Layer if necessary
-    fn check_self(&mut self) {
-        // Before you wreck self
+    #[rustfmt::skip]
+    fn check_self(&mut self) { // Before you wreck self
         let len = self.layers.len();
 
         if self.layers.is_empty() {
             self.add_layer();
         }
+
         if self.active >= len {
             self.active = len.saturating_sub(1);
         }
@@ -98,15 +99,6 @@ impl Layers {
         self.check_self();
         &self.layers[self.active]
     }
-
-    pub fn get_layer_name(&self, layer_id: u32) -> Option<String> {
-        self.layers
-            .iter()
-            .find(|l| l.id == layer_id)
-            .cloned()
-            .map(|l| l.name)
-    }
-
     pub fn get_layer_mut(&mut self, layer_id: u32) -> &mut Layer {
         let index_option = self.layers.iter().position(|l| l.id == layer_id);
         self.queue_render();
@@ -192,10 +184,10 @@ impl Layers {
         false
     }
 
-    pub fn get_display_info(&self) -> Vec<(usize, (String, bool))> {
+    pub fn get_display_info(&self) -> Vec<(usize, (&str, bool))> {
         self.layers
             .iter()
-            .map(|l| (l.name.clone(), l.visible))
+            .map(|l| (l.name.as_str(), l.visible))
             .rev()
             .enumerate()
             .collect()
@@ -209,13 +201,14 @@ impl Layers {
     pub fn render(&mut self) -> LayerData {
         self.rendered
             .get_or_insert_with(|| {
-                self.layers.iter().filter(|l| l.visible).fold(
-                    LayerData::default(),
-                    |mut page, layer| {
+                self.layers
+                    .iter()
+                    // Only render visible layers
+                    .filter(|l| l.visible)
+                    .fold(LayerData::default(), |mut page, layer| {
                         page.extend(layer.data.iter().filter(|&(_, &c)| c != Cell::default()));
                         page
-                    },
-                )
+                    })
             })
             .clone()
     }

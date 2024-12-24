@@ -14,7 +14,7 @@ pub type AppResult<T> = core::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Default, Debug)]
 pub struct App {
     pub running: bool,
-    pub canvas: Layers,
+    pub layers: Layers,
     pub input_capture: InputCapture,
     pub history: History,
     pub palette: Palette,
@@ -42,7 +42,7 @@ impl App {
     pub fn resize(&mut self, width: u16, height: u16) {
         self.input_capture.clear();
 
-        for layer in self.canvas.layers.iter_mut() {
+        for layer in self.layers.layers.iter_mut() {
             layer
                 .data
                 .retain(|&(cx, cy), _cell| cx < width && cy < height);
@@ -51,7 +51,7 @@ impl App {
 
     /// Removes a cell from the current layer and returns the cell value
     pub fn erase(&mut self, x: u16, y: u16) -> Cell {
-        let layer = self.canvas.current_layer_mut();
+        let layer = self.layers.current_layer_mut();
         let old_cell = layer.data.remove(&(x, y)).unwrap_or_default();
 
         self.history.forget_redo();
@@ -66,34 +66,22 @@ impl App {
         let tool = self.brush.tool;
         let mut old_cells = LayerData::new();
 
-        let path = connect_points((x, y), self.canvas.last_pos);
+        let path = connect_points((x, y), self.layers.last_pos);
 
         for (x, y) in path {
             let mut partial_draw_step = tool.draw(x, y, size, self);
-
             partial_draw_step.extend(old_cells);
 
             old_cells = partial_draw_step;
         }
 
-        self.canvas.last_pos = Some((x, y));
+        self.layers.last_pos = Some((x, y));
 
         old_cells
     }
 
     pub fn put_cell(&mut self, x: u16, y: u16) -> Cell {
-        let layer = self.canvas.current_layer_mut();
-        let new_cell = self.brush.as_cell();
-
-        let old_cell = layer.data.insert((x, y), new_cell).unwrap_or_default();
-
-        self.history.forget_redo();
-
-        old_cell
-    }
-
-    pub fn old_draw(&mut self, x: u16, y: u16) -> Cell {
-        let layer = self.canvas.current_layer_mut();
+        let layer = self.layers.current_layer_mut();
         let new_cell = self.brush.as_cell();
 
         let old_cell = layer.data.insert((x, y), new_cell).unwrap_or_default();
@@ -104,7 +92,7 @@ impl App {
     }
 
     pub fn insert_at_cell(&mut self, x: u16, y: u16, cell: Cell) -> Cell {
-        let layer = self.canvas.current_layer_mut();
+        let layer = self.layers.current_layer_mut();
 
         let old_cell = layer.data.insert((x, y), cell).unwrap_or_default();
 
@@ -120,13 +108,13 @@ impl App {
 
         match action {
             HistoryAction::LayerAdded(id) => {
-                self.canvas.remove_layer_by_id(id);
+                self.layers.remove_layer_by_id(id);
             }
             HistoryAction::LayerRemoved(ref layer, index) => {
-                self.canvas.insert_layer(layer.clone(), index);
+                self.layers.insert_layer(layer.clone(), index);
             }
             HistoryAction::LayerRenamed(id, old_name) => {
-                let layer = self.canvas.get_layer_mut(id);
+                let layer = self.layers.get_layer_mut(id);
                 let current_name = layer.name.clone();
 
                 layer.name = old_name;
@@ -136,7 +124,7 @@ impl App {
             HistoryAction::Draw(layer_id, ref draw_data) => {
                 let mut old_data = LayerData::new();
                 for (&pos, &cell) in draw_data {
-                    let cell_op = self.canvas.get_layer_mut(layer_id).data.insert(pos, cell);
+                    let cell_op = self.layers.get_layer_mut(layer_id).data.insert(pos, cell);
 
                     if let Some(cell) = cell_op {
                         old_data.insert(pos, cell);
@@ -145,15 +133,15 @@ impl App {
                 action = HistoryAction::Draw(layer_id, old_data);
             }
             HistoryAction::LayerUp(layer_id) => {
-                let _ = self.canvas.move_layer_down_by_id(layer_id);
+                let _ = self.layers.move_layer_down_by_id(layer_id);
             }
             HistoryAction::LayerDown(layer_id) => {
-                let _ = self.canvas.move_layer_up_by_id(layer_id);
+                let _ = self.layers.move_layer_up_by_id(layer_id);
             }
         }
 
         self.history.future.push(action);
-        self.canvas.queue_render();
+        self.layers.queue_render();
     }
 
     pub fn redo(&mut self) {
@@ -162,12 +150,12 @@ impl App {
         };
 
         match action {
-            HistoryAction::LayerAdded(id) => self.canvas.add_layer_with_id(id),
+            HistoryAction::LayerAdded(id) => self.layers.add_layer_with_id(id),
             HistoryAction::LayerRemoved(ref layer, _index) => {
-                self.canvas.remove_layer_by_id(layer.id);
+                self.layers.remove_layer_by_id(layer.id);
             }
             HistoryAction::LayerRenamed(id, name) => {
-                let layer = self.canvas.get_layer_mut(id);
+                let layer = self.layers.get_layer_mut(id);
                 let current_name = layer.name.clone();
                 layer.name = name;
 
@@ -176,7 +164,7 @@ impl App {
             HistoryAction::Draw(layer_id, ref draw_data) => {
                 let mut old_data = LayerData::new();
                 for (&pos, &cell) in draw_data {
-                    let cell_op = self.canvas.get_layer_mut(layer_id).data.insert(pos, cell);
+                    let cell_op = self.layers.get_layer_mut(layer_id).data.insert(pos, cell);
 
                     if let Some(cell) = cell_op {
                         old_data.insert(pos, cell);
@@ -185,35 +173,35 @@ impl App {
                 action = HistoryAction::Draw(layer_id, old_data);
             }
             HistoryAction::LayerUp(layer_id) => {
-                self.canvas.move_layer_up_by_id(layer_id);
+                self.layers.move_layer_up_by_id(layer_id);
             }
             HistoryAction::LayerDown(layer_id) => {
-                self.canvas.move_layer_down_by_id(layer_id);
+                self.layers.move_layer_down_by_id(layer_id);
             }
         }
 
         self.history.past.push(action);
-        self.canvas.queue_render();
+        self.layers.queue_render();
     }
 
     pub fn remove_active_layer(&mut self) {
-        let (layer, index) = self.canvas.remove_active_layer();
+        let (layer, index) = self.layers.remove_active_layer();
         self.history.remove_layer(layer, index);
     }
 
     pub fn apply_rename(&mut self) -> Option<()> {
         let new_name = self.input_capture.text_area.get()?;
-        let (id, old_name) = self.canvas.rename_active_layer(new_name);
+        let (id, old_name) = self.layers.rename_active_layer(new_name);
         self.history.rename_layer(id, old_name);
         Some(())
     }
 
     pub fn reset(&mut self) {
-        self.canvas = Layers::default();
+        self.layers = Layers::default();
         self.history = History::default();
         self.palette = Palette::default();
         self.brush = Brush::default();
-        self.canvas.queue_render();
+        self.layers.queue_render();
     }
 }
 
